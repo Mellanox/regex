@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: BSD-3-Clause
 /* Copyright 2018 Mellanox Technologies, Ltd */
 
-#include <rte_flow_driver.h>
-#include <rte_malloc.h>
 #include <unistd.h>
 
-#include "mlx5.h"
-#include "mlx5_glue.h"
+#include <rte_flow_driver.h>
+#include <rte_malloc.h>
+
 #include "mlx5_prm.h"
+#include "mlx5_devx_cmds.h"
+#include "mlx5_utils.h"
+
 
 /**
  * Allocate flow counters via devx interface.
