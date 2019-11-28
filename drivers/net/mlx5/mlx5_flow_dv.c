@@ -28,12 +28,13 @@
 #include <rte_gre.h>
 #include <rte_vxlan.h>
 
-#include "mlx5.h"
+#include <mlx5_glue.h>
+#include <mlx5_devx_cmds.h>
+#include <mlx5_prm.h>
+
 #include "mlx5_defs.h"
-#include "mlx5_glue.h"
-#include "mlx5_devx_cmds.h"
+#include "mlx5.h"
 #include "mlx5_flow.h"
-#include "mlx5_prm.h"
 #include "mlx5_rxtx.h"
 
 #ifdef HAVE_IBV_FLOW_DV_SUPPORT

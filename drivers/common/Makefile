@@ -30,4 +30,8 @@ ifeq ($(CONFIG_RTE_LIBRTE_COMMON_DPAAX),y)
 DIRS-y += dpaax
 endif
 
+ifeq ($(CONFIG_RTE_LIBRTE_MLX5_PMD),y)
+DIRS-y += mlx5
+endif
+
 include $(RTE_SDK)/mk/rte.subdir.mk
