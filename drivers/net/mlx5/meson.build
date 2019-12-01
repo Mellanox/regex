@@ -8,10 +8,6 @@ if not is_linux
 	subdir_done()
 endif
 
-LIB_GLUE_BASE = 'librte_pmd_mlx5_glue.so'
-LIB_GLUE_VERSION = '20.02.0'
-LIB_GLUE = LIB_GLUE_BASE + '.' + LIB_GLUE_VERSION
-
 allow_experimental_apis = true
 deps += ['hash', 'common_mlx5']
 sources = files(
