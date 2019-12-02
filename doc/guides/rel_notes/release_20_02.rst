@@ -56,6 +56,12 @@ New Features
      Also, make sure to start the actual text at the margin.
      =========================================================
 
+
+* **Add new VDPA PMD based on Mellanox devices**
+
+  Added a new Mellanox VDPA  (``mlx5_vdpa``) PMD.
+  See the :doc:`../vdpadevs/mlx5` guide for more details on this driver.
+
 * **Updated Mellanox mlx5 driver.**
 
   Updated Mellanox mlx5 driver with new features and improvements, including:

@@ -739,6 +739,7 @@ F: buildtools/options-ibverbs-static.sh
 F: doc/guides/nics/mlx5.rst
 F: doc/guides/nics/features/mlx5.ini
 
+
 Microsoft vdev_netvsc - EXPERIMENTAL
 M: Matan Azrad <matan@mellanox.com>
 F: drivers/net/vdev_netvsc/
@@ -1092,6 +1093,13 @@ M: Xiao Wang <xiao.w.wang@intel.com>
 F: drivers/vdpa/ifc/
 F: doc/guides/vdpadevs/ifc.rst
 F: doc/guides/vdpadevs/features/ifcvf.ini
+
+Mellanox mlx5 vDPA
+M: Matan Azrad <matan@mellanox.com>
+M: Viacheslav Ovsiienko <viacheslavo@mellanox.com>
+F: drivers/vdpa/mlx5/
+F: doc/guides/vdpadevs/mlx5.rst
+F: doc/guides/vdpadevs/features/mlx5.ini
 
 
 Eventdev Drivers
