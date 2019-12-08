@@ -73,3 +73,4 @@ Programmer's Guide
     lto
     profile_app
     glossary
+    regexdev_lib

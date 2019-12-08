@@ -832,6 +832,11 @@ CONFIG_RTE_LIBRTE_PMD_OCTEONTX2_EP_RAWDEV=y
 CONFIG_RTE_LIBRTE_PMD_NTB_RAWDEV=y
 
 #
+# Compile regex device support
+#
+CONFIG_RTE_LIBRTE_REGEXDEV=y
+
+#
 # Compile librte_ring
 #
 CONFIG_RTE_LIBRTE_RING=y
@@ -1136,3 +1141,4 @@ CONFIG_RTE_APP_CRYPTO_PERF=y
 # Compile the eventdev application
 #
 CONFIG_RTE_APP_EVENTDEV=y
+
