@@ -343,6 +343,9 @@ mlx5_devx_cmd_query_hca_attr(struct ibv_context *ctx,
 	attr->flex_parser_protocols = MLX5_GET(cmd_hca_cap, hcattr,
 					       flex_parser_protocols);
 	attr->qos.sup = MLX5_GET(cmd_hca_cap, hcattr, qos);
+	attr->vdpa.valid = !!(MLX5_GET64(cmd_hca_cap, hcattr,
+					 general_obj_types) &
+			      MLX5_GENERAL_OBJ_TYPES_CAP_VIRTQ_NET_Q);
 	if (attr->qos.sup) {
 		MLX5_SET(query_hca_cap_in, in, op_mod,
 			 MLX5_GET_HCA_CAP_OP_MOD_QOS_CAP |
@@ -364,6 +367,75 @@ mlx5_devx_cmd_query_hca_attr(struct ibv_context *ctx,
 				MLX5_GET(qos_cap, hcattr, log_max_flow_meter);
 		attr->qos.flow_meter_reg_c_ids =
 			MLX5_GET(qos_cap, hcattr, flow_meter_reg_id);
+	}
+	if (attr->vdpa.valid) {
+		memset(out, 0, sizeof(out));
+		MLX5_SET(query_hca_cap_in, in, op_mod,
+			 MLX5_GET_HCA_CAP_OP_MOD_VDPA_EMULATION |
+			 MLX5_HCA_CAP_OPMOD_GET_CUR);
+		rc = mlx5_glue->devx_general_cmd(ctx, in, sizeof(in),
+						 out, sizeof(out));
+		if (rc || status) {
+			RTE_LOG(DEBUG, PMD, "Failed to query devx VDPA"
+				" capabilities, status %x, syndrome = %x",
+				status, syndrome);
+			attr->vdpa.valid = 0;
+		} else {
+			hcattr = MLX5_ADDR_OF(query_hca_cap_out, out,
+					      capability);
+			attr->vdpa.desc_tunnel_offload_type =
+				MLX5_GET(virtio_emulation_cap, hcattr,
+					 desc_tunnel_offload_type);
+			attr->vdpa.eth_frame_offload_type =
+				MLX5_GET(virtio_emulation_cap, hcattr,
+					 eth_frame_offload_type);
+			attr->vdpa.virtio_version_1_0 =
+				MLX5_GET(virtio_emulation_cap, hcattr,
+					 virtio_version_1_0);
+			attr->vdpa.tso_ivp4 = MLX5_GET(virtio_emulation_cap,
+						       hcattr, tso_ivp4);
+			attr->vdpa.tso_ivp6 = MLX5_GET(virtio_emulation_cap,
+						       hcattr, tso_ivp6);
+			attr->vdpa.tx_csum = MLX5_GET(virtio_emulation_cap,
+						      hcattr, tx_csum);
+			attr->vdpa.rx_csum = MLX5_GET(virtio_emulation_cap,
+						       hcattr, rx_csum);
+			attr->vdpa.event_mode = MLX5_GET(virtio_emulation_cap,
+							 hcattr, event_mode);
+			attr->vdpa.virtio_queue_type =
+				MLX5_GET(virtio_emulation_cap, hcattr,
+					 virtio_queue_type);
+			attr->vdpa.log_doorbell_stride =
+				MLX5_GET(virtio_emulation_cap, hcattr,
+					 log_doorbell_stride);
+			attr->vdpa.log_doorbell_bar_size =
+				MLX5_GET(virtio_emulation_cap, hcattr,
+					 log_doorbell_bar_size);
+			attr->vdpa.doorbell_bar_offset =
+				MLX5_GET64(virtio_emulation_cap, hcattr,
+					   doorbell_bar_offset);
+			attr->vdpa.max_num_virtio_queues =
+				MLX5_GET(virtio_emulation_cap, hcattr,
+					 max_num_virtio_queues);
+			attr->vdpa.umem_1_buffer_param_a =
+				MLX5_GET(virtio_emulation_cap, hcattr,
+					 umem_1_buffer_param_a);
+			attr->vdpa.umem_1_buffer_param_b =
+				MLX5_GET(virtio_emulation_cap, hcattr,
+					 umem_1_buffer_param_b);
+			attr->vdpa.umem_2_buffer_param_a =
+				MLX5_GET(virtio_emulation_cap, hcattr,
+					 umem_2_buffer_param_a);
+			attr->vdpa.umem_2_buffer_param_b =
+				MLX5_GET(virtio_emulation_cap, hcattr,
+					 umem_2_buffer_param_a);
+			attr->vdpa.umem_3_buffer_param_a =
+				MLX5_GET(virtio_emulation_cap, hcattr,
+					 umem_3_buffer_param_a);
+			attr->vdpa.umem_3_buffer_param_b =
+				MLX5_GET(virtio_emulation_cap, hcattr,
+					 umem_3_buffer_param_b);
+		}
 	}
 	if (!attr->eth_net_offloads)
 		return 0;
