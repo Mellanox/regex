@@ -258,6 +258,8 @@ struct mlx5_glue {
 	int (*devx_port_query)(struct ibv_context *ctx,
 			       uint32_t port_num,
 			       struct mlx5dv_devx_port *mlx5_devx_port);
+	int (*devx_query_eqn)(struct ibv_context *context, uint32_t cpus,
+			      uint32_t *eqn);
 };
 
 const struct mlx5_glue *mlx5_glue;

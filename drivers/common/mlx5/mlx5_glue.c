@@ -1037,6 +1037,20 @@ mlx5_glue_devx_port_query(struct ibv_context *ctx,
 #endif
 }
 
+static int
+mlx5_glue_devx_query_eqn(struct ibv_context *ctx, uint32_t cpus,
+			 uint32_t *eqn)
+{
+#ifdef HAVE_IBV_DEVX_OBJ
+	return mlx5dv_devx_query_eqn(ctx, cpus, eqn);
+#else
+	(void)ctx;
+	(void)cpus;
+	(void)eqn;
+	return -ENOTSUP;
+#endif
+}
+
 alignas(RTE_CACHE_LINE_SIZE)
 const struct mlx5_glue *mlx5_glue = &(const struct mlx5_glue){
 	.version = MLX5_GLUE_VERSION,
@@ -1135,4 +1149,5 @@ const struct mlx5_glue *mlx5_glue = &(const struct mlx5_glue){
 	.devx_umem_dereg = mlx5_glue_devx_umem_dereg,
 	.devx_qp_query = mlx5_glue_devx_qp_query,
 	.devx_port_query = mlx5_glue_devx_port_query,
+	.devx_query_eqn = mlx5_glue_devx_query_eqn,
 };
