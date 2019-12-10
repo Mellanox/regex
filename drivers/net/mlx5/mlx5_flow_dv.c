@@ -3719,7 +3719,9 @@ flow_dv_create_counter_stat_mem_mng(struct rte_eth_dev *dev, int raws_n)
 	mkey_attr.size = size;
 	mkey_attr.umem_id = mem_mng->umem->umem_id;
 	mkey_attr.pd = sh->pdn;
-	mem_mng->dm = mlx5_devx_cmd_mkey_create(sh->ctx, &mkey_attr);
+	mkey_attr.log_entity_size = 0;
+	mkey_attr.pg_access = 0;
+	mem_mng->dm = mlx5_devx_cmd_mkey_create(sh->ctx, &mkey_attr, NULL, 0);
 	if (!mem_mng->dm) {
 		mlx5_glue->devx_umem_dereg(mem_mng->umem);
 		rte_errno = errno;

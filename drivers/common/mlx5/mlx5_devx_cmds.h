@@ -18,6 +18,8 @@ struct mlx5_devx_mkey_attr {
 	uint64_t size;
 	uint32_t umem_id;
 	uint32_t pd;
+	uint32_t log_entity_size;
+	uint32_t pg_access:1;
 };
 
 /* HCA qos attributes. */
@@ -212,6 +214,13 @@ struct mlx5_devx_modify_sq_attr {
 	uint32_t hairpin_peer_vhca:16;
 };
 
+/* UMR memory buffer used to define 1 entry in indirect mkey. */
+struct mlx5_klm {
+	uint32_t byte_count;
+	uint32_t mkey;
+	uint64_t address;
+};
+
 /* mlx5_devx_cmds.c */
 
 struct mlx5_devx_obj *mlx5_devx_cmd_flow_counter_alloc(struct ibv_context *ctx,
@@ -226,7 +235,9 @@ int mlx5_devx_cmd_flow_counter_query(struct mlx5_devx_obj *dcs,
 int mlx5_devx_cmd_query_hca_attr(struct ibv_context *ctx,
 				 struct mlx5_hca_attr *attr);
 struct mlx5_devx_obj *mlx5_devx_cmd_mkey_create(struct ibv_context *ctx,
-					      struct mlx5_devx_mkey_attr *attr);
+					       struct mlx5_devx_mkey_attr *attr,
+					       struct mlx5_klm *klm_array,
+					       int klm_num);
 int mlx5_devx_get_out_command_status(void *out);
 int mlx5_devx_cmd_qp_query_tis_td(struct ibv_qp *qp, uint32_t tis_num,
 				  uint32_t *tis_td);
