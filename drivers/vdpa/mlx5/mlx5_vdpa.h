@@ -9,9 +9,27 @@
 
 #include <rte_vdpa.h>
 #include <rte_vhost.h>
+#include <rte_spinlock.h>
 
 #include <mlx5_glue.h>
 #include <mlx5_devx_cmds.h>
+#include <mlx5_prm.h>
+
+
+struct mlx5_vdpa_cq {
+	uint16_t log_desc_n;
+	uint32_t cq_ci:24;
+	uint32_t arm_sn:2;
+	rte_spinlock_t sl;
+	struct mlx5_devx_obj *cq;
+	struct mlx5dv_devx_umem *umem_obj;
+	union {
+		volatile void *umem_buf;
+		volatile struct mlx5_cqe *cqes;
+	};
+	volatile uint32_t *db_rec;
+	uint64_t errors;
+};
 
 struct mlx5_vdpa_query_mr {
 	SLIST_ENTRY(mlx5_vdpa_query_mr) next;
@@ -34,6 +52,9 @@ struct mlx5_vdpa_priv {
 	uint32_t gpa_mkey_index;
 	struct ibv_mr *null_mr;
 	struct rte_vhost_memory *vmem;
+	uint32_t eqn;
+	struct mlx5dv_devx_event_channel *eventc;
+	struct mlx5dv_devx_uar *uar;
 	SLIST_HEAD(mr_list, mlx5_vdpa_query_mr) mr_list;
 };
 
@@ -56,5 +77,40 @@ void mlx5_vdpa_mem_dereg(struct mlx5_vdpa_priv *priv);
  *   0 on success, a negative errno value otherwise and rte_errno is set.
  */
 int mlx5_vdpa_mem_register(struct mlx5_vdpa_priv *priv);
+
+
+/**
+ * Create a CQ and all its related resources.
+ *
+ * @param[in] priv
+ *   The vdpa driver private structure.
+ * @param[in] desc_n
+ *   Number of CQEs.
+ * @param[in] callfd
+ *   The guest notification file descriptor.
+ * @param[in/out] cq
+ *   Pointer to the CQ structure.
+ *
+ * @return
+ *   0 on success, -1 otherwise and rte_errno is set.
+ */
+int mlx5_vdpa_cq_create(struct mlx5_vdpa_priv *priv, uint16_t desc_n,
+			int callfd, struct mlx5_vdpa_cq *cq);
+
+/**
+ * Destroy a CQ and all its related resources.
+ *
+ * @param[in/out] cq
+ *   Pointer to the CQ structure.
+ */
+void mlx5_vdpa_cq_destroy(struct mlx5_vdpa_cq *cq);
+
+/**
+ * Release all the CQ global resources.
+ *
+ * @param[in] priv
+ *   The vdpa driver private structure.
+ */
+void mlx5_vdpa_cq_global_release(struct mlx5_vdpa_priv *priv);
 
 #endif /* RTE_PMD_MLX5_VDPA_H_ */
