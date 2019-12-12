@@ -10,11 +10,15 @@
 #include <rte_vdpa.h>
 #include <rte_vhost.h>
 #include <rte_spinlock.h>
+#include <rte_interrupts.h>
 
 #include <mlx5_glue.h>
 #include <mlx5_devx_cmds.h>
 #include <mlx5_prm.h>
 
+
+#define MLX5_VDPA_INTR_RETRIES 256
+#define MLX5_VDPA_INTR_RETRIES_USEC 1000
 
 struct mlx5_vdpa_cq {
 	uint16_t log_desc_n;
@@ -55,6 +59,7 @@ struct mlx5_vdpa_priv {
 	uint32_t eqn;
 	struct mlx5dv_devx_event_channel *eventc;
 	struct mlx5dv_devx_uar *uar;
+	struct rte_intr_handle intr_handle;
 	SLIST_HEAD(mr_list, mlx5_vdpa_query_mr) mr_list;
 };
 
@@ -112,5 +117,24 @@ void mlx5_vdpa_cq_destroy(struct mlx5_vdpa_cq *cq);
  *   The vdpa driver private structure.
  */
 void mlx5_vdpa_cq_global_release(struct mlx5_vdpa_priv *priv);
+
+/**
+ * Setup CQE event.
+ *
+ * @param[in] priv
+ *   The vdpa driver private structure.
+ *
+ * @return
+ *   0 on success, a negative errno value otherwise and rte_errno is set.
+ */
+int mlx5_vdpa_cqe_event_setup(struct mlx5_vdpa_priv *priv);
+
+/**
+ * Unset CQE event .
+ *
+ * @param[in] priv
+ *   The vdpa driver private structure.
+ */
+void mlx5_vdpa_cqe_event_unset(struct mlx5_vdpa_priv *priv);
 
 #endif /* RTE_PMD_MLX5_VDPA_H_ */
