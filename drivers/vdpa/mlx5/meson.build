@@ -14,6 +14,7 @@ sources = files(
 	'mlx5_vdpa.c',
 	'mlx5_vdpa_mem.c',
 	'mlx5_vdpa_cq.c',
+	'mlx5_vdpa_virtq.c',
 )
 cflags_options = [
 	'-std=c11',
