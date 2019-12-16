@@ -64,6 +64,8 @@ struct mlx5_vdpa_virtq {
 		void *buf;
 		uint32_t size;
 	} umems[3];
+	struct rte_intr_handle intr_handle;
+	struct mlx5_vdpa_priv *priv;
 };
 
 struct mlx5_vdpa_steer {
@@ -100,6 +102,8 @@ struct mlx5_vdpa_priv {
 	uint64_t features; /* Negotiated features. */
 	SLIST_HEAD(virtq_list, mlx5_vdpa_virtq) virtq_list;
 	struct mlx5_vdpa_steer steer;
+	struct mlx5dv_var *var;
+	void *virtq_db_addr;
 	SLIST_HEAD(mr_list, mlx5_vdpa_query_mr) mr_list;
 };
 
