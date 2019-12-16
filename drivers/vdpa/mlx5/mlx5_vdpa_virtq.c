@@ -15,14 +15,14 @@ static int
 mlx5_vdpa_virtq_unset(struct mlx5_vdpa_virtq *virtq)
 {
 	int ret __rte_unused;
-	int i;
+	unsigned i;
 
 	if (virtq->virtq) {
 		ret = mlx5_devx_cmd_destroy(virtq->virtq);
 		assert(!ret);
 		virtq->virtq = NULL;
 	}
-	for (i = 0; i < 3; ++i) {
+	for (i = 0; i < RTE_DIM(virtq->umems); ++i) {
 		if (virtq->umems[i].obj) {
 			ret = mlx5_glue->devx_umem_dereg(virtq->umems[i].obj);
 			assert(!ret);
@@ -65,6 +65,27 @@ mlx5_vdpa_virtqs_release(struct mlx5_vdpa_priv *priv)
 	priv->features = 0;
 }
 
+int
+mlx5_vdpa_virtq_state_modify(struct mlx5_vdpa_virtq *virtq, int state)
+{
+	struct mlx5_devx_virtq_attr attr = {
+			.type = MLX5_VIRTQ_MODIFY_TYPE_STATE,
+			.state = state ? MLX5_VIRTQ_STATE_RDY :
+					 MLX5_VIRTQ_STATE_SUSPEND,
+			.queue_index = virtq->index,
+	};
+
+	if (virtq->state == state)
+		return 0;
+	if (mlx5_devx_cmd_modify_virtq(virtq->virtq, &attr)) {
+		DRV_LOG(ERR, "Failed to modify virtq %d state to %u.",
+			virtq->index, state);
+		return -1;
+	}
+	virtq->state = state;
+	return 0;
+}
+
 static uint64_t
 mlx5_vdpa_hva_to_gpa(struct rte_vhost_memory *mem, uint64_t hva)
 {
@@ -91,7 +112,7 @@ mlx5_vdpa_virtq_setup(struct mlx5_vdpa_priv *priv,
 	struct mlx5_devx_virtq_attr attr = {0};
 	uint64_t gpa;
 	int ret;
-	int i;
+	unsigned i;
 	uint16_t last_avail_idx;
 	uint16_t last_used_idx;
 
@@ -129,7 +150,7 @@ mlx5_vdpa_virtq_setup(struct mlx5_vdpa_priv *priv,
 			" need CQ and event mechanism.", index);
 	}
 	/* Setup 3 UMEMs for each virtq. */
-	for (i = 0; i < 3; ++i) {
+	for (i = 0; i < RTE_DIM(virtq->umems); ++i) {
 		virtq->umems[i].size = priv->caps.umems[i].a * vq.size +
 							  priv->caps.umems[i].b;
 		assert(virtq->umems[i].size);
@@ -188,6 +209,8 @@ mlx5_vdpa_virtq_setup(struct mlx5_vdpa_priv *priv,
 	attr.queue_index = index;
 	virtq->virtq = mlx5_devx_cmd_create_virtq(priv->ctx, &attr);
 	if (!virtq->virtq)
+		goto error;
+	if (mlx5_vdpa_virtq_state_modify(virtq, 1))
 		goto error;
 	return 0;
 error:
