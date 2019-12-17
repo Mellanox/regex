@@ -267,6 +267,11 @@ mlx5_vdpa_virtq_setup(struct mlx5_vdpa_priv *priv,
 	if (mlx5_vdpa_virtq_state_modify(virtq, 1))
 		goto error;
 	virtq->priv = priv;
+	/* Be sure notifications are not missed during configuration. */
+	ret = rte_vhost_enable_guest_notification(priv->vid, index, 1);
+	assert(!ret);
+	rte_write32(virtq->index, priv->virtq_db_addr);
+	/* Setup doorbell mapping. */
 	virtq->intr_handle.fd = vq.kickfd;
 	virtq->intr_handle.type = RTE_INTR_HANDLE_EXT;
 	if (rte_intr_callback_register(&virtq->intr_handle,

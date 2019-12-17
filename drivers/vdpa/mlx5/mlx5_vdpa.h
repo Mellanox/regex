@@ -233,4 +233,46 @@ int mlx5_vdpa_steer_unset(struct mlx5_vdpa_priv *priv);
  */
 int mlx5_vdpa_steer_setup(struct mlx5_vdpa_priv *priv);
 
+/**
+ * Enable\Disable live migration logging.
+ *
+ * @param[in] priv
+ *   The vdpa driver private structure.
+ * @param[in] enable
+ *   Set for enable, unset for disable.
+ *
+ * @return
+ *   0 on success, a negative value otherwise.
+ */
+int mlx5_vdpa_logging_enable(struct mlx5_vdpa_priv *priv, int enable);
+
+/**
+ * Set dirty bitmap logging to allow live migration.
+ *
+ * @param[in] priv
+ *   The vdpa driver private structure.
+ * @param[in] log_base
+ *   Vhost log base.
+ * @param[in] log_size
+ *   Vhost log size.
+ *
+ * @return
+ *   0 on success, a negative value otherwise.
+ */
+int mlx5_vdpa_dirty_bitmap_set(struct mlx5_vdpa_priv *priv, uint64_t log_base,
+			       uint64_t log_size);
+
+/**
+ * Log all virtqs information for live migration.
+ *
+ * @param[in] priv
+ *   The vdpa driver private structure.
+ * @param[in] enable
+ *   Set for enable, unset for disable.
+ *
+ * @return
+ *   0 on success, a negative value otherwise.
+ */
+int mlx5_vdpa_lm_log(struct mlx5_vdpa_priv *priv);
+
 #endif /* RTE_PMD_MLX5_VDPA_H_ */
