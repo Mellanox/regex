@@ -2910,6 +2910,43 @@ mlx5_device_bond_pci_match(const struct ibv_device *ibv_dev,
 	return pf;
 }
 
+static int
+mlx5_vdpa_check_handler(__rte_unused const char *key,
+		const char *value, __rte_unused void *opaque)
+{
+	if (strcmp(value, "1"))
+		return -1;
+
+	return 0;
+}
+
+static int
+mlx5_vdpa_mode_selected(struct rte_devargs *devargs)
+{
+	struct rte_kvargs *kvlist;
+	const char *key = "vdpa";
+	int ret = 0;
+
+	if (devargs == NULL)
+		return 0;
+
+	kvlist = rte_kvargs_parse(devargs->args, NULL);
+	if (kvlist == NULL)
+		return 0;
+
+	if (!rte_kvargs_count(kvlist, key))
+		goto exit;
+
+	/* Vdpa mode selected when there's a key-value pair: vdpa=1. */
+	if (rte_kvargs_process(kvlist, key, mlx5_vdpa_check_handler, NULL) < 0)
+		goto exit;
+	ret = 1;
+
+exit:
+	rte_kvargs_free(kvlist);
+	return ret;
+}
+
 /**
  * DPDK callback to register a PCI device.
  *
@@ -2956,6 +2993,11 @@ mlx5_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	struct mlx5_dev_config dev_config;
 	int ret;
 
+	if (mlx5_vdpa_mode_selected(pci_dev->device.devargs)) {
+		DRV_LOG(DEBUG, "Skip probing - should be probed by the vdpa"
+			" driver.");
+		return 1;
+	}
 	ret = mlx5_init_once();
 	if (ret) {
 		DRV_LOG(ERR, "unable to init PMD global data: %s",
