@@ -56,6 +56,12 @@ New Features
      Also, make sure to start the actual text at the margin.
      =========================================================
 
+* **Updated Mellanox mlx5 driver.**
+
+  Updated Mellanox mlx5 driver with new features and improvements, including:
+
+  * Added support for RSS using L3/L4 source/destination only.
+
 
 Removed Items
 -------------
