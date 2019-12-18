@@ -5,4 +5,10 @@ include $(RTE_SDK)/mk/rte.vars.mk
 
 # DIRS-$(<configuration>) += <directory>
 
+ifeq ($(CONFIG_RTE_LIBRTE_VHOST),y)
+ifeq ($(CONFIG_RTE_EAL_VFIO),y)
+DIRS-$(CONFIG_RTE_LIBRTE_IFC_PMD) += ifc
+endif
+endif # $(CONFIG_RTE_LIBRTE_VHOST)
+
 include $(RTE_SDK)/mk/rte.subdir.mk
