@@ -15,14 +15,13 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #include <rte_errno.h>
 #include <rte_atomic.h>
-#include <rte_ether.h>
 
-#include "mlx5.h"
 #include "mlx5_nl.h"
-#include "mlx5_utils.h"
+#include "mlx5_common_utils.h"
 
 /* Size of the buffer to receive kernel messages */
 #define MLX5_NL_BUF_SIZE (32 * 1024)

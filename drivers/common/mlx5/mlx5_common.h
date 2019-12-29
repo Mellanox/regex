@@ -16,6 +16,35 @@
 
 
 /*
+ * Compilation workaround for PPC64 when AltiVec is fully enabled, e.g. std=c11.
+ * Otherwise there would be a type conflict between stdbool and altivec.
+ */
+#if defined(__PPC64__) && !defined(__APPLE_ALTIVEC__)
+#undef bool
+/* redefine as in stdbool.h */
+#define bool _Bool
+#endif
+
+/* Bit-field manipulation. */
+#define BITFIELD_DECLARE(bf, type, size) \
+	type bf[(((size_t)(size) / (sizeof(type) * CHAR_BIT)) + \
+		 !!((size_t)(size) % (sizeof(type) * CHAR_BIT)))]
+#define BITFIELD_DEFINE(bf, type, size) \
+	BITFIELD_DECLARE((bf), type, (size)) = { 0 }
+#define BITFIELD_SET(bf, b) \
+	(assert((size_t)(b) < (sizeof(bf) * CHAR_BIT)), \
+	 (void)((bf)[((b) / (sizeof((bf)[0]) * CHAR_BIT))] |= \
+		((size_t)1 << ((b) % (sizeof((bf)[0]) * CHAR_BIT)))))
+#define BITFIELD_RESET(bf, b) \
+	(assert((size_t)(b) < (sizeof(bf) * CHAR_BIT)), \
+	 (void)((bf)[((b) / (sizeof((bf)[0]) * CHAR_BIT))] &= \
+		~((size_t)1 << ((b) % (sizeof((bf)[0]) * CHAR_BIT)))))
+#define BITFIELD_ISSET(bf, b) \
+	(assert((size_t)(b) < (sizeof(bf) * CHAR_BIT)), \
+	 !!(((bf)[((b) / (sizeof((bf)[0]) * CHAR_BIT))] & \
+	     ((size_t)1 << ((b) % (sizeof((bf)[0]) * CHAR_BIT))))))
+
+/*
  * Helper macros to work around __VA_ARGS__ limitations in a C99 compliant
  * manner.
  */
@@ -110,6 +139,33 @@ enum {
 	PCI_DEVICE_ID_MELLANOX_CONNECTX6DXVF = 0x101e,
 };
 
+/* Maximum number of simultaneous unicast MAC addresses. */
+#define MLX5_MAX_UC_MAC_ADDRESSES 128
+/* Maximum number of simultaneous Multicast MAC addresses. */
+#define MLX5_MAX_MC_MAC_ADDRESSES 128
+/* Maximum number of simultaneous MAC addresses. */
+#define MLX5_MAX_MAC_ADDRESSES \
+	(MLX5_MAX_UC_MAC_ADDRESSES + MLX5_MAX_MC_MAC_ADDRESSES)
+
+/* Recognized Infiniband device physical port name types. */
+enum mlx5_nl_phys_port_name_type {
+	MLX5_PHYS_PORT_NAME_TYPE_NOTSET = 0, /* Not set. */
+	MLX5_PHYS_PORT_NAME_TYPE_LEGACY, /* before kernel ver < 5.0 */
+	MLX5_PHYS_PORT_NAME_TYPE_UPLINK, /* p0, kernel ver >= 5.0 */
+	MLX5_PHYS_PORT_NAME_TYPE_PFVF, /* pf0vf0, kernel ver >= 5.0 */
+	MLX5_PHYS_PORT_NAME_TYPE_UNKNOWN, /* Unrecognized. */
+};
+
+/** Switch information returned by mlx5_nl_switch_info(). */
+struct mlx5_nl_switch_info {
+	uint32_t master:1; /**< Master device. */
+	uint32_t representor:1; /**< Representor device. */
+	enum mlx5_nl_phys_port_name_type name_type; /** < Port name type. */
+	int32_t pf_num; /**< PF number (valid for pfxvfx format only). */
+	int32_t port_name; /**< Representor port name. */
+	uint64_t switch_id; /**< Switch identifier. */
+};
+
 /* CQE status. */
 enum mlx5_cqe_status {
 	MLX5_CQE_STATUS_SW_OWN = -1,
@@ -149,5 +205,7 @@ check_cqe(volatile struct mlx5_cqe *cqe, const uint16_t cqes_n,
 }
 
 int mlx5_dev_to_pci_addr(const char *dev_path, struct rte_pci_addr *pci_addr);
+void mlx5_translate_port_name(const char *port_name_in,
+			      struct mlx5_nl_switch_info *port_info_out);
 
 #endif /* RTE_PMD_MLX5_COMMON_H_ */

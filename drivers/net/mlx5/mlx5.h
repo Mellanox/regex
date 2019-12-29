@@ -35,11 +35,11 @@
 #include <mlx5_glue.h>
 #include <mlx5_devx_cmds.h>
 #include <mlx5_prm.h>
+#include <mlx5_nl.h>
 
 #include "mlx5_defs.h"
 #include "mlx5_utils.h"
 #include "mlx5_mr.h"
-#include "mlx5_nl.h"
 #include "mlx5_autoconf.h"
 
 /* Request types for IPC. */
@@ -614,8 +614,6 @@ int mlx5_sysfs_switch_info(unsigned int ifindex,
 			   struct mlx5_nl_switch_info *info);
 void mlx5_sysfs_check_switch_info(bool device_dir,
 				  struct mlx5_nl_switch_info *switch_info);
-void mlx5_translate_port_name(const char *port_name_in,
-			      struct mlx5_nl_switch_info *port_info_out);
 void mlx5_intr_callback_unregister(const struct rte_intr_handle *handle,
 				   rte_intr_callback_fn cb_fn, void *cb_arg);
 int mlx5_get_module_info(struct rte_eth_dev *dev,

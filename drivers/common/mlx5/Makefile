@@ -16,6 +16,7 @@ SRCS-y += mlx5_glue.c
 endif
 SRCS-y += mlx5_devx_cmds.c
 SRCS-y += mlx5_common.c
+SRCS-y += mlx5_nl.c
 ifeq ($(CONFIG_RTE_IBVERBS_LINK_DLOPEN),y)
 INSTALL-y-lib += $(LIB_GLUE)
 endif
@@ -42,7 +43,7 @@ else
 LDLIBS += -libverbs -lmlx5
 endif
 
-LDLIBS += -lrte_eal -lrte_pci
+LDLIBS += -lrte_eal -lrte_pci -lrte_net
 
 # A few warnings cannot be avoided in external headers.
 CFLAGS += -Wno-error=cast-qual -DNDEBUG -UPEDANTIC
