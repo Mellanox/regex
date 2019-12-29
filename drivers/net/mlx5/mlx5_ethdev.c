@@ -1824,12 +1824,12 @@ mlx5_dev_to_eswitch_info(struct rte_eth_dev *dev)
  *   0 on success, a negative errno value otherwise and rte_errno is set.
  */
 int
-mlx5_sysfs_switch_info(unsigned int ifindex, struct mlx5_switch_info *info)
+mlx5_sysfs_switch_info(unsigned int ifindex, struct mlx5_nl_switch_info *info)
 {
 	char ifname[IF_NAMESIZE];
 	char port_name[IF_NAMESIZE];
 	FILE *file;
-	struct mlx5_switch_info data = {
+	struct mlx5_nl_switch_info data = {
 		.master = 0,
 		.representor = 0,
 		.name_type = MLX5_PHYS_PORT_NAME_TYPE_NOTSET,
@@ -1906,7 +1906,7 @@ mlx5_sysfs_switch_info(unsigned int ifindex, struct mlx5_switch_info *info)
  */
 void
 mlx5_nl_check_switch_info(bool num_vf_set,
-			  struct mlx5_switch_info *switch_info)
+			  struct mlx5_nl_switch_info *switch_info)
 {
 	switch (switch_info->name_type) {
 	case MLX5_PHYS_PORT_NAME_TYPE_UNKNOWN:
@@ -1955,7 +1955,7 @@ mlx5_nl_check_switch_info(bool num_vf_set,
  */
 void
 mlx5_sysfs_check_switch_info(bool device_dir,
-			     struct mlx5_switch_info *switch_info)
+			     struct mlx5_nl_switch_info *switch_info)
 {
 	switch (switch_info->name_type) {
 	case MLX5_PHYS_PORT_NAME_TYPE_UNKNOWN:
@@ -2002,7 +2002,7 @@ mlx5_sysfs_check_switch_info(bool device_dir,
  */
 void
 mlx5_translate_port_name(const char *port_name_in,
-			 struct mlx5_switch_info *port_info_out)
+			 struct mlx5_nl_switch_info *port_info_out)
 {
 	char pf_c1, pf_c2, vf_c1, vf_c2;
 	char *end;

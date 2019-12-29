@@ -180,7 +180,7 @@ struct mlx5_dev_spawn_data {
 	uint32_t max_port; /**< IB device maximal port index. */
 	uint32_t ibv_port; /**< IB device physical port index. */
 	int pf_bond; /**< bonding device PF index. < 0 - no bonding */
-	struct mlx5_switch_info info; /**< Switch information. */
+	struct mlx5_nl_switch_info info; /**< Switch information. */
 	struct ibv_device *ibv_dev; /**< Associated IB device. */
 	struct rte_eth_dev *eth_dev; /**< Associated Ethernet device. */
 	struct rte_pci_device *pci_dev; /**< Backend PCI device. */
@@ -2065,7 +2065,7 @@ mlx5_dev_spawn(struct rte_device *dpdk_dev,
 	       struct mlx5_dev_spawn_data *spawn,
 	       struct mlx5_dev_config config)
 {
-	const struct mlx5_switch_info *switch_info = &spawn->info;
+	const struct mlx5_nl_switch_info *switch_info = &spawn->info;
 	struct mlx5_ibv_shared *sh = NULL;
 	struct ibv_port_attr port_attr;
 	struct mlx5dv_context dv_attr = { .comp_mask = 0 };
@@ -2790,9 +2790,9 @@ error:
 static int
 mlx5_dev_spawn_data_cmp(const void *a, const void *b)
 {
-	const struct mlx5_switch_info *si_a =
+	const struct mlx5_nl_switch_info *si_a =
 		&((const struct mlx5_dev_spawn_data *)a)->info;
-	const struct mlx5_switch_info *si_b =
+	const struct mlx5_nl_switch_info *si_b =
 		&((const struct mlx5_dev_spawn_data *)b)->info;
 	int ret;
 
@@ -2875,7 +2875,7 @@ mlx5_device_bond_pci_match(const struct ibv_device *ibv_dev,
 	while (fscanf(file, "%" RTE_STR(IF_NAMESIZE) "s", ifname) == 1) {
 		char tmp_str[IF_NAMESIZE + 32];
 		struct rte_pci_addr pci_addr;
-		struct mlx5_switch_info	info;
+		struct mlx5_nl_switch_info	info;
 
 		/* Process slave interface names in the loop. */
 		snprintf(tmp_str, sizeof(tmp_str),
