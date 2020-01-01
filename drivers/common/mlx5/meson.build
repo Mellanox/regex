@@ -166,6 +166,7 @@ if build
 		'RDMA_NLDEV_ATTR_PORT_INDEX' ],
 		[ 'HAVE_RDMA_NLDEV_ATTR_NDEV_INDEX', 'rdma/rdma_netlink.h',
 		'RDMA_NLDEV_ATTR_NDEV_INDEX' ],
+		[ 'HAVE_DEVLINK', 'linux/devlink.h', 'DEVLINK_GENL_NAME' ],
 	]
 	config = configuration_data()
 	foreach arg:has_sym_args
