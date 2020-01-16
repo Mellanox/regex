@@ -379,6 +379,8 @@ mlx5_devx_cmd_query_hca_attr(struct ibv_context *ctx,
 	attr->vdpa.valid = !!(MLX5_GET64(cmd_hca_cap, hcattr,
 					 general_obj_types) &
 			      MLX5_GENERAL_OBJ_TYPES_CAP_VIRTQ_NET_Q);
+	attr->regex = MLX5_GET(cmd_hca_cap, hcattr, regexp);
+	attr->regexp_num_of_engines = MLX5_GET(cmd_hca_cap, hcattr, regexp_num_of_engines);
 	if (attr->qos.sup) {
 		MLX5_SET(query_hca_cap_in, in, op_mod,
 			 MLX5_GET_HCA_CAP_OP_MOD_QOS_CAP |
