@@ -1,0 +1,105 @@
+
+.. raw:: html
+
+   <style>
+      .wy-nav-content {
+         opacity: .99;
+      }
+      table#id1 {
+         cursor: default;
+         overflow: hidden;
+      }
+      table#id1 p {
+         margin: 0;
+         line-height: inherit;
+      }
+      table#id1 th, table#id1 td {
+         text-align: center;
+         border: solid 1px #ddd;
+      }
+      table#id1 th {
+         padding: 0.5em 0;
+      }
+      table#id1 th, table#id1 th p {
+         font-size: 11px;
+         white-space: pre-wrap;
+         vertical-align: top;
+         min-width: 0.9em;
+      }
+      table#id1 col:first-child {
+         width: 0;
+      }
+      table#id1 th:first-child {
+         vertical-align: bottom;
+      }
+      table#id1 td {
+         padding: 1px;
+      }
+      table#id1 td, table#id1 td p {
+         font-size: 11px;
+      }
+      table#id1 td:first-child {
+         padding-left: 1em;
+         text-align: left;
+      }
+      table#id1 tr:nth-child(2n-1) td {
+         background-color: rgba(210, 210, 210, 0.2);
+      }
+      table#id1 th:not(:first-child):hover,
+      table#id1 td:not(:first-child):hover {
+         position: relative;
+      }
+      table#id1 th:not(:first-child):hover::after,
+      table#id1 td:not(:first-child):hover::after {
+         content: '';
+         height: 6000px;
+         top: -3000px;
+         width: 100%;
+         left: 0;
+         position: absolute;
+         z-index: -1;
+         background-color: #ffb;
+      }
+      table#id1 tr:hover td {
+         background-color: #ffb;
+      }
+   </style>
+
+.. table:: Features availability in RegEx drivers
+
+   ========================== =
+   Feature                    m
+                              l
+                              x
+                              5
+   ========================== =
+   Cross buffer
+   PCRE start anchor
+   PCRE atomic grouping
+   PCRE back reference
+   PCRE back tracking ctrl
+   PCRE call outs
+   PCRE forward reference
+   PCRE greedy
+   PCRE match all
+   PCRE match as end
+   PCRE match point rst
+   PCRE new line conventions
+   PCRE new line SEQ
+   PCRE look around
+   PCRE possessive qualifiers
+   PCRE subroutine reference
+   PCRE UTF-8
+   PCRE UTF-16
+   PCRE UTF-32
+   PCRE word boundary
+   Run time compilation
+   ARMv7
+   ARMv8                      Y
+   Power8
+   x86-32                     Y
+   x86-64                     Y
+   Usage doc                  Y
+   Design doc                 Y
+   Perf doc
+   ========================== =

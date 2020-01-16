@@ -81,6 +81,11 @@ New Features
   Added the RegEx library which provides an API for offload of regular
   expressions search operations to hardware or software accelerator devices.
 
+* **Added the RegEx Library, a generic RegEx service library.**
+
+  Added Mellanox MLX5 RegEx PMD driver, which implements the RegEx library
+  and allows to offload RegEx searches.
+
 * **Updated PCAP driver.**
 
   Updated PCAP driver with new features and improvements, including:
