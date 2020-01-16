@@ -80,6 +80,8 @@ struct mlx5_hca_attr {
 	uint32_t log_max_hairpin_wq_data_sz:5;
 	uint32_t log_max_hairpin_num_packets:5;
 	uint32_t vhca_id:16;
+	uint32_t regex:1;
+	uint32_t regexp_num_of_engines;
 	struct mlx5_hca_qos_attr qos;
 	struct mlx5_hca_vdpa_attr vdpa;
 };
