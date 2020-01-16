@@ -25,13 +25,17 @@ static const struct {
 	const char *name;
 	unsigned int dev_class;
 } mlx5_classes[] = {
-	{ .name = "vdpa", .dev_class = MLX5_CLASS_VDPA },
 	{ .name = "net", .dev_class = MLX5_CLASS_NET },
+	{ .name = "vdpa", .dev_class = MLX5_CLASS_VDPA },
+	{ .name = "regex", .dev_class = MLX5_CLASS_REGEX },
 };
 
 static const unsigned int mlx5_class_combinations[] = {
 	MLX5_CLASS_NET,
 	MLX5_CLASS_VDPA,
+	MLX5_CLASS_REGEX,
+	MLX5_CLASS_REGEX | MLX5_CLASS_NET,
+	MLX5_CLASS_REGEX | MLX5_CLASS_VDPA,
 	/* New class combination should be added here.
 	 * For example a new multi class device combination
 	 * can be MLX5_CLASS_FOO | MLX5_CLASS_BAR.
