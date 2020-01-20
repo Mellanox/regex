@@ -201,6 +201,8 @@ extern "C" {
 #include <rte_errno.h>
 #include <rte_memory.h>
 
+#define RTE_REGEX_NAME_MAX_LEN RTE_DEV_NAME_MAX_LEN
+
 /**
  * @warning
  * @b EXPERIMENTAL: this API may change without prior notice.
@@ -1403,6 +1405,8 @@ __rte_experimental
 uint16_t
 rte_regex_dequeue_burst(uint8_t dev_id, uint16_t qp_id,
 			struct rte_regex_ops **ops, uint16_t nb_ops);
+
+#include <rte_regexdev_core.h>
 
 #ifdef __cplusplus
 }
