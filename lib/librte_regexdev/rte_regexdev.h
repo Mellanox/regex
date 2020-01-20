@@ -1466,6 +1466,8 @@ uint16_t
 rte_regexdev_dequeue_burst(uint8_t dev_id, uint16_t qp_id,
 			   struct rte_regex_ops **ops, uint16_t nb_ops);
 
+#include "rte_regexdev_core.h"
+
 #ifdef __cplusplus
 }
 #endif

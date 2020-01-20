@@ -3,5 +3,5 @@
 
 allow_experimental_apis = true
 sources = files('rte_regexdev.c')
-headers = files('rte_regexdev.h')
+headers = files('rte_regexdev.h', 'rte_regexdev_core.h')
 deps += ['mbuf']
