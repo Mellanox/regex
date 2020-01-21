@@ -22,6 +22,6 @@ CFLAGS += $(WERROR_FLAGS)
 SRCS-$(CONFIG_RTE_LIBRTE_REGEXDEV) := rte_regexdev.c
 
 # export include files
-SYMLINK-$(CONFIG_RTE_LIBRTE_REGEXDEV)-include += rte_regexdev.h
+SYMLINK-$(CONFIG_RTE_LIBRTE_REGEXDEV)-include += rte_regexdev.h rte_regexdev_core.h
 
 include $(RTE_SDK)/mk/rte.lib.mk
