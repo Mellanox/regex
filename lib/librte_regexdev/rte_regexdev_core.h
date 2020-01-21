@@ -127,7 +127,18 @@ struct rte_regexdev_ops {
 	regexdev_dump_t dev_dump;
 };
 
-#define RTE_REGEXDEV_NAME_MAX_LEN
+/**
+ * @internal
+ * Possible states of a RegEx device.
+ */
+enum rte_regexdev_state {
+	RTE_REGEXDEV_UNUSED = 0, /**< Device is unused. */
+	RTE_REGEXDEV_REGISTERED,
+	/**< Device is registered, but not ready to be used. */
+	RTE_REGEXDEV_READY,
+	/**< Device is ready for use. This is set by the PMD. */
+};
+
 /**
  * @internal
  * The data part, with no function pointers, associated with each RegEx device.
@@ -137,6 +148,8 @@ struct rte_regexdev_ops {
  */
 struct rte_regexdev_data {
 	void *dev_private; /**< PMD-specific private data. */
+	char dev_name[RTE_REGEXDEV_NAME_MAX_LEN]; /**< Unique identifier name */
+	uint16_t dev_id; /**< Device [external]  identifier. */
 } __rte_cache_aligned;
 
 /**
@@ -155,6 +168,7 @@ struct rte_regexdev {
 	const struct rte_regexdev_ops *dev_ops;
 	/**< Functions exported by PMD */
 	struct rte_device *device; /**< Backing device */
+	enum rte_regexdev_state state; /**< The device state. */
 	struct rte_regexdev_data *data;  /**< Pointer to device data. */
 } __rte_cache_aligned;
 

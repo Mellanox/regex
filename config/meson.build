@@ -232,6 +232,7 @@ endforeach
 dpdk_conf.set('RTE_MAX_LCORE', get_option('max_lcores'))
 dpdk_conf.set('RTE_MAX_NUMA_NODES', get_option('max_numa_nodes'))
 dpdk_conf.set('RTE_MAX_ETHPORTS', get_option('max_ethports'))
+dpdk_conf.set('RTE_MAX_REGEXDEV_DEVS', get_option('max_regexdev_devs'))
 dpdk_conf.set('RTE_LIBEAL_USE_HPET', get_option('use_hpet'))
 dpdk_conf.set('RTE_ENABLE_TRACE_FP', get_option('enable_trace_fp'))
 # values which have defaults which may be overridden
