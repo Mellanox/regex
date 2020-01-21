@@ -19,4 +19,9 @@ int mlx5_regex_database_query(struct ibv_context *ctx, int engine_id,
 int mlx5_regex_engine_stop(struct ibv_context *ctx, int engine_id);
 int mlx5_regex_engine_go(struct ibv_context *ctx, int engine_id);
 
+int mlx5_regex_register_write(struct ibv_context *ctx, int engine_id,
+			      uint32_t addr, uint32_t data);
+int mlx5_regex_register_read(struct ibv_context *ctx, int engine_id,
+			     uint32_t addr, uint32_t *data);
+
 #endif /* MLX5_REGEX_H */
