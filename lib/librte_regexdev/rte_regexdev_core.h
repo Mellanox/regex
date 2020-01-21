@@ -137,8 +137,11 @@ struct rte_regex_dev_ops {
 struct rte_regex_dev {
 	regex_dev_enqueue_t enqueue;
 	regex_dev_dequeue_t dequeue;
-	const struct regex_dev_ops *dev_ops; /**< Functions exported by PMD */
+	const struct rte_regex_dev_ops *dev_ops;
+	/**< Functions exported by PMD */
 	struct rte_device *device; /**< Backing device */
+	char dev_name[RTE_REGEX_NAME_MAX_LEN]; /**< Unique identifier name */
+	uint16_t dev_id; /**< Device [external]  identifier. */
 } __rte_cache_aligned;
 
 #endif /* _RTE_REGEX_CORE_H_ */

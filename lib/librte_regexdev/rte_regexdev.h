@@ -203,6 +203,11 @@ extern "C" {
 
 #define RTE_REGEX_NAME_MAX_LEN RTE_DEV_NAME_MAX_LEN
 
+extern int rte_regex_dev_logtype;
+
+#define RTE_REGEXDEV_LOG(level, ...) \
+	rte_log(RTE_LOG_ ## level, rte_regex_dev_logtype, "" __VA_ARGS__)
+
 /**
  * @warning
  * @b EXPERIMENTAL: this API may change without prior notice.
