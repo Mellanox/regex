@@ -832,9 +832,10 @@ CONFIG_RTE_LIBRTE_PMD_OCTEONTX2_EP_RAWDEV=y
 CONFIG_RTE_LIBRTE_PMD_NTB_RAWDEV=y
 
 #
-# Compile regex device support
+# Compile RexEx device support
 #
 CONFIG_RTE_LIBRTE_REGEXDEV=y
+CONFIG_RTE_MAX_REGEXDEV_DEVS=32
 
 #
 # Compile librte_ring
