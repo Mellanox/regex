@@ -3,3 +3,7 @@
  */
 
 #include "mlx5_regex.h"
+#include "mlx5_regex_utils.h"
+
+int mlx5_regex_logtype;
+
