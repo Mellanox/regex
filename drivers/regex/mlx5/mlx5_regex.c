@@ -139,3 +139,79 @@ mlx5_regex_database_query(struct ibv_context *ctx, int engine_id,
 				  regexp_params.db_umem_offset);
 	return 0;
 }
+
+
+/**
+ * Write to RXP registers.
+ *
+ * @param ctx
+ *   ibv device handle
+ * @param engine_id
+ *   Chooses on which engine the register will be written..
+ * @param addr
+ *   Register address.
+ * @param data
+ *   Data to be written to the register.
+ *
+ * @return
+ *   0 on success, error otherwise
+ */
+int
+mlx5_regex_register_write(struct ibv_context *ctx, int engine_id,
+			  uint32_t addr, uint32_t data)
+{
+	uint32_t out[DEVX_ST_SZ_DW(set_regexp_register_out)] = {};
+	uint32_t in[DEVX_ST_SZ_DW(set_regexp_register_in)] = {};
+	int err;
+
+	DEVX_SET(set_regexp_register_in, in, opcode,
+		 MLX5_CMD_SET_REGEX_REGISTERS);
+	DEVX_SET(set_regexp_register_in, in, engine_id, engine_id);
+	DEVX_SET(set_regexp_register_in, in, register_address, addr);
+	DEVX_SET(set_regexp_register_in, in, register_data, data);
+
+	err = mlx5dv_devx_general_cmd(ctx, in, sizeof(in), out, sizeof(out));
+	if (err) {
+		DRV_LOG(ERR, "Set regexp register failed %d", err);
+		return err;
+	}
+	return 0;
+}
+
+
+/**
+ * Read from RXP registers
+ *
+ * @param ctx
+ *   ibv device handle
+ * @param engine_id
+ *   Chooses from which engine to read.
+ * @param addr
+ *   Register address.
+ * @param data
+ *   Output containing the pointer to the data..
+ *
+ * @return
+ *   0 on success, error otherwise
+ */
+int
+mlx5_regex_register_read(struct ibv_context *ctx, int engine_id,
+			 uint32_t addr, uint32_t *data)
+{
+	uint32_t out[DEVX_ST_SZ_DW(query_regexp_register_out)] = {};
+	uint32_t in[DEVX_ST_SZ_DW(query_regexp_register_in)] = {};
+	int err;
+
+	DEVX_SET(query_regexp_register_in, in, opcode,
+		 MLX5_CMD_QUERY_REGEX_REGISTERS);
+	DEVX_SET(query_regexp_register_in, in, engine_id, engine_id);
+	DEVX_SET(query_regexp_register_in, in, register_address, addr);
+
+	err = mlx5dv_devx_general_cmd(ctx, in, sizeof(in), out, sizeof(out));
+	if (err) {
+		DRV_LOG(ERR, "Query regexp register failed %d", err);
+		return err;
+	}
+	*data = DEVX_GET(query_regexp_register_out, out, register_data);
+	return 0;
+}
