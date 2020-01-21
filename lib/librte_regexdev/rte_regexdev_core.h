@@ -140,7 +140,7 @@ struct rte_regex_dev_data {
 	void *dev_private; /**< PMD-specific private data. */
 	struct rte_regex_dev_config dev_conf;
 	/**< Configuration applied to device. */
-	uint16_t port_id;           /**< Device [external] port identifier. */
+	uint16_t dev_id;           /**< Device [external]  identifier. */
 	uint64_t reserved_64s[4]; /**< Reserved for future fields */
 	void *reserved_ptrs[4];   /**< Reserved for future fields */
 } __rte_cache_aligned;
