@@ -47,13 +47,16 @@ typedef int (*regex_dev_attr_get_t)(struct rte_regex_dev *dev,
 
 typedef int (*regex_dev_attr_set_t)(struct rte_regex_dev *dev,
 				    enum rte_regex_dev_attr_id id,
-				    void *value);
+				    const void *value);
 /**< @internal Set selected attribute to regex device. */
 
 typedef int (*regex_dev_rule_db_update_t)(struct rte_regex_dev *dev,
 				    	  const struct rte_regex_rule *rules,
 					  uint16_t nb_rules);
 /**< @internal Update the rule database for the regex device. */
+
+typedef int (*regex_dev_rule_db_compile_t)(struct rte_regex_dev *dev);
+/**< @internal Compile and write the rule database for the regex device. */
 
 typedef int (*regex_dev_rule_db_import_t)(struct rte_regex_dev *dev,
 				    	  const char *rule_db,
@@ -75,17 +78,12 @@ typedef int (*regex_dev_xstats_get_t)(struct rte_regex_dev *dev,
 /**< @internal Get xstats values for the regex device. */
 
 typedef int (*regex_dev_xstats_by_name_get_t)(struct rte_regex_dev *dev,
-					      const char *name, uint64_t value);
+					      const char *name, uint16_t *id,
+					      uint64_t *value);
 /**< @internal Get xstat value for the regex device based on the xstats name. */
 
 typedef int (*regex_dev_xstats_reset_t)(struct rte_regex_dev *dev,
-					const uint16_t ids[], uint64_t values[],
-					uint16_t n);
-/**< @internal Reset xstats values for the regex device. */
-
-typedef int (*regex_dev_xstats_reset_t)(struct rte_regex_dev *dev,
-					const uint16_t ids[], uint64_t values[],
-					uint16_t n);
+					const uint16_t ids[], uint16_t n);
 /**< @internal Reset xstats values for the regex device. */
 
 typedef int (*regex_dev_selftest_t)(struct rte_regex_dev *dev);
@@ -113,7 +111,10 @@ struct rte_regex_dev_ops {
 	regex_dev_start_t dev_start;
 	regex_dev_stop_t dev_stop;
 	regex_dev_close_t dev_close;
+	regex_dev_attr_get_t dev_attr_get;
+	regex_dev_attr_set_t dev_attr_set;
 	regex_dev_rule_db_update_t dev_rule_db_update;
+	regex_dev_rule_db_compile_t dev_rule_db_compile;
 	regex_dev_rule_db_import_t dev_db_import;
 	regex_dev_rule_db_export_t dev_db_export;
 	regex_dev_xstats_names_get_t dev_xstats_names_get;
@@ -130,16 +131,10 @@ struct rte_regex_dev_ops {
  *
  * This structure is safe to place in shared memory to be common among different
  * processes in a multi-process configuration.
+ *
+ * This struct is defined by each pmd.
  */
-struct rte_regex_dev_data {
-	uint16_t nb_qp; /**< Number of queue pairs. */
-	void *dev_private; /**< PMD-specific private data. */
-	struct rte_regex_dev_config dev_conf;
-	/**< Configuration applied to device. */
-	uint16_t dev_id;           /**< Device [external]  identifier. */
-	uint64_t reserved_64s[4]; /**< Reserved for future fields */
-	void *reserved_ptrs[4];   /**< Reserved for future fields */
-} __rte_cache_aligned;
+struct rte_regex_dev_data;
 
 /**
  * @internal
@@ -154,10 +149,12 @@ struct rte_regex_dev_data {
 struct rte_regex_dev {
 	regex_dev_enqueue_t enqueue;
 	regex_dev_dequeue_t dequeue;
-	struct rte_regex_dev_data *data;  /**< Pointer to device data. */
-	const struct regex_dev_ops *dev_ops; /**< Functions exported by PMD */
+	struct rte_regex_dev_data *dev_data;  /**< Pointer to device data. */
+	const struct rte_regex_dev_ops *dev_ops;
+	/**< Functions exported by PMD */
 	struct rte_device *device; /**< Backing device */
-	char name[RTE_REGEX_NAME_MAX_LEN]; /**< Unique identifier name */
+	char dev_name[RTE_REGEX_NAME_MAX_LEN]; /**< Unique identifier name */
+	uint16_t dev_id; /**< Device [external]  identifier. */
 } __rte_cache_aligned;
 
 #endif /* _RTE_REGEX_CORE_H_ */
