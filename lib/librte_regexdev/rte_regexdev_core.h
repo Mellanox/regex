@@ -47,13 +47,16 @@ typedef int (*regex_dev_attr_get_t)(struct rte_regex_dev *dev,
 
 typedef int (*regex_dev_attr_set_t)(struct rte_regex_dev *dev,
 				    enum rte_regex_dev_attr_id id,
-				    void *value);
+				    const void *value);
 /**< @internal Set selected attribute to regex device. */
 
 typedef int (*regex_dev_rule_db_update_t)(struct rte_regex_dev *dev,
 					  const struct rte_regex_rule *rules,
 					  uint16_t nb_rules);
 /**< @internal Update the rule database for the regex device. */
+
+typedef int (*regex_dev_rule_db_compile_t)(struct rte_regex_dev *dev);
+/**< @internal Compile and write the rule database for the regex device. */
 
 typedef int (*regex_dev_rule_db_import_t)(struct rte_regex_dev *dev,
 					  const char *rule_db,
@@ -75,17 +78,12 @@ typedef int (*regex_dev_xstats_get_t)(struct rte_regex_dev *dev,
 /**< @internal Get xstats values for the regex device. */
 
 typedef int (*regex_dev_xstats_by_name_get_t)(struct rte_regex_dev *dev,
-					      const char *name, uint64_t value);
+					      const char *name, uint16_t *id,
+					      uint64_t *value);
 /**< @internal Get xstat value for the regex device based on the xstats name. */
 
 typedef int (*regex_dev_xstats_reset_t)(struct rte_regex_dev *dev,
-					const uint16_t ids[], uint64_t values[],
-					uint16_t n);
-/**< @internal Reset xstats values for the regex device. */
-
-typedef int (*regex_dev_xstats_reset_t)(struct rte_regex_dev *dev,
-					const uint16_t ids[], uint64_t values[],
-					uint16_t n);
+					const uint16_t ids[], uint16_t n);
 /**< @internal Reset xstats values for the regex device. */
 
 typedef int (*regex_dev_selftest_t)(struct rte_regex_dev *dev);
@@ -113,7 +111,10 @@ struct rte_regex_dev_ops {
 	regex_dev_start_t dev_start;
 	regex_dev_stop_t dev_stop;
 	regex_dev_close_t dev_close;
+	regex_dev_attr_get_t dev_attr_get;
+	regex_dev_attr_set_t dev_attr_set;
 	regex_dev_rule_db_update_t dev_rule_db_update;
+	regex_dev_rule_db_compile_t dev_rule_db_compile;
 	regex_dev_rule_db_import_t dev_db_import;
 	regex_dev_rule_db_export_t dev_db_export;
 	regex_dev_xstats_names_get_t dev_xstats_names_get;
