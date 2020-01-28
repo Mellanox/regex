@@ -14,14 +14,21 @@
 #include "rte_regexdev.h"
 #include "rte_regexdev_driver.h"
 
+enum regex_dev_state {
+	REGEX_DEV_FREE = 0,
+	REGEX_DEV_USED,
+};
+
 static struct {
 	struct rte_regex_dev_data data[RTE_MAX_REGEXDEV_DEVS];
-} rte_regex_dev_shared_data;
+} regex_dev_shared_data;
 
-static struct rte_regex_dev rte_regex_devices[RTE_MAX_REGEXDEV_DEVS];
+static struct rte_regex_dev regex_devices[RTE_MAX_REGEXDEV_DEVS];
+
+static  enum regex_dev_state regex_device_state[RTE_MAX_REGEXDEV_DEVS];
 
 /* spinlock for shared data allocation */
-static rte_spinlock_t rte_regex_shared_data_lock = RTE_SPINLOCK_INITIALIZER;
+static rte_spinlock_t regex_shared_data_lock = RTE_SPINLOCK_INITIALIZER;
 
 
 static uint16_t
@@ -30,8 +37,7 @@ regex_dev_find_free_dev(void)
 	unsigned i;
 
 	for (i = 0; i < RTE_MAX_REGEXDEV_DEVS; i++) {
-		if (rte_regex_devices[i].data != NULL &&
-		    rte_regex_devices[i].data->name[0] == '\0')
+		if (regex_device_state[i] == REGEX_DEV_FREE)
 			return i;
 	}
 	return RTE_MAX_REGEXDEV_DEVS;
@@ -43,9 +49,9 @@ regex_dev_allocated(const char *name)
 	unsigned i;
 
 	for (i = 0; i < RTE_MAX_REGEXDEV_DEVS; i++) {
-		if (rte_regex_devices[i].data != NULL &&
-		    strcmp(rte_regex_devices[i].data->name, name) == 0)
-			return &rte_regex_devices[i];
+		if (regex_device_state[i] == REGEX_DEV_USED)
+			if (strcmp(name, regex_devices[i].name))
+				return &regex_devices[i];
 	}
 	return NULL;
 }
@@ -53,7 +59,7 @@ regex_dev_allocated(const char *name)
 static struct rte_regex_dev*
 regex_dev_get(uint16_t dev_id)
 {
-	return (&rte_regex_devices[dev_id]);
+	return (&regex_devices[dev_id]);
 }
 
 struct rte_regex_dev *
@@ -73,7 +79,7 @@ rte_regex_dev_register(const char *name)
 		return NULL;
 	}
 	/* Synchronize dev creation between primary and secondary threads. */
-	rte_spinlock_lock(&rte_regex_shared_data_lock);
+	rte_spinlock_lock(&regex_shared_data_lock);
 	if (regex_dev_allocated(name) != NULL) {
 		RTE_REGEXDEV_LOG
 			(ERR, "RegEx device with name %s already allocated\n",
@@ -87,22 +93,22 @@ rte_regex_dev_register(const char *name)
 		goto unlock;
 	}
 	regex_dev = regex_dev_get(dev_id);
-	regex_dev->data = &rte_regex_dev_shared_data.data[dev_id];
-	strlcpy(regex_dev->data->name, name, sizeof(regex_dev->data->name));
+	regex_dev->data = &regex_dev_shared_data.data[dev_id];
+	strlcpy(regex_dev->name, name, sizeof(*regex_dev->name));
 	regex_dev->data->dev_id = dev_id;
 unlock:
-	rte_spinlock_unlock(&rte_regex_shared_data_lock);
+	rte_spinlock_unlock(&regex_shared_data_lock);
 	return regex_dev;
 }
 
 int
-rte_regex_dev_release(struct rte_regex_dev *regex_dev)
+rte_regex_dev_unregister(struct rte_regex_dev *regex_dev)
 {
 	if (regex_dev == NULL)
 		return -EINVAL;
-	rte_spinlock_lock(&rte_regex_shared_data_lock);
-	memset(regex_dev->data, 0, sizeof(struct rte_regex_dev_data));
-	rte_spinlock_unlock(&rte_regex_shared_data_lock);
+	rte_spinlock_lock(&regex_shared_data_lock);
+	memset(regex_dev->data, 0, sizeof(*regex_dev->data));
+	rte_spinlock_unlock(&regex_shared_data_lock);
 	return 0;
 }
 

@@ -122,9 +122,6 @@ struct rte_regex_dev_ops {
 	regex_dev_xstats_reset_t dev_xstats_reset;
 	regex_dev_selftest_t dev_selftest;
 	regex_dev_dump_t dev_dump;
-
-	/** Reserved for future extension */
-	void *reserved[5];
 };
 
 /**
@@ -135,7 +132,6 @@ struct rte_regex_dev_ops {
  * processes in a multi-process configuration.
  */
 struct rte_regex_dev_data {
-	char name[RTE_REGEX_NAME_MAX_LEN]; /**< Unique identifier name */
 	uint16_t nb_qp; /**< Number of queue pairs. */
 	void *dev_private; /**< PMD-specific private data. */
 	struct rte_regex_dev_config dev_conf;
@@ -161,8 +157,7 @@ struct rte_regex_dev {
 	struct rte_regex_dev_data *data;  /**< Pointer to device data. */
 	const struct regex_dev_ops *dev_ops; /**< Functions exported by PMD */
 	struct rte_device *device; /**< Backing device */
-	uint64_t reserved_64s[4]; /**< Reserved for future fields */
-	void *reserved_ptrs[4];   /**< Reserved for future fields */
+	char name[RTE_REGEX_NAME_MAX_LEN]; /**< Unique identifier name */
 } __rte_cache_aligned;
 
 #endif /* _RTE_REGEX_CORE_H_ */

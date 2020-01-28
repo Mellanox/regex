@@ -12,7 +12,6 @@
  *
  * These APIs for the use from regex drivers, user applications shouldn't
  * use them.
- *
  */
 
 #include <rte_regexdev.h>
@@ -37,7 +36,7 @@ struct rte_regex_dev *rte_regex_dev_register(const char *name);
 
 /**
  * @internal
- * Release the specified regexdev port.
+ * Unregister the specified regexdev port.
  *
  * @param dev
  *   Device to be released.
@@ -45,7 +44,7 @@ struct rte_regex_dev *rte_regex_dev_register(const char *name);
  * @return
  *   0 on success, Negative errno value on error.
  */
-int rte_regex_dev_release(struct rte_regex_dev *dev);
+int rte_regex_dev_unregister(struct rte_regex_dev *dev);
 
 #ifdef __cplusplus
 }
