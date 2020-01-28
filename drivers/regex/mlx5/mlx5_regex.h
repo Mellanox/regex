@@ -55,7 +55,7 @@ void mlx5_regex_set_metadata(void *seg,
 }
 
 int mlx5_regex_database_set(struct ibv_context *ctx, int engine_id,
-			    struct mlx5_database_ctx *db_ctx);
+			    const struct mlx5_database_ctx *db_ctx);
 int mlx5_regex_database_query(struct ibv_context *ctx, int engine_id,
 			      struct mlx5_database_ctx *db_ctx);
 int mlx5_regex_engine_stop(struct ibv_context *ctx, int engine_id);

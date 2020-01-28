@@ -50,7 +50,7 @@ struct mlx5_regex_ctx {
 
 static int
 regex_database_set(struct ibv_context *ctx, int engine_id,
-		   struct mlx5_database_ctx *db_ctx, int stop, int go)
+		   const struct mlx5_database_ctx *db_ctx, int stop, int go)
 {
 	uint32_t out[DEVX_ST_SZ_DW(set_regexp_params_out)] = {};
 	uint32_t in[DEVX_ST_SZ_DW(set_regexp_params_in)] = {};
@@ -98,7 +98,7 @@ regex_database_set(struct ibv_context *ctx, int engine_id,
  */
 int
 mlx5_regex_database_set(struct ibv_context *ctx, int engine_id,
-			struct mlx5_database_ctx *db_ctx)
+			const struct mlx5_database_ctx *db_ctx)
 {
 	return regex_database_set(ctx, engine_id, db_ctx, 0, 0);
 }
