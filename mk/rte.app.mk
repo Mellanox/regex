@@ -203,7 +203,7 @@ else ifeq ($(CONFIG_RTE_IBVERBS_LINK_STATIC),y)
 LIBS_IBVERBS_STATIC = $(shell $(RTE_SDK)/buildtools/options-ibverbs-static.sh)
 _LDLIBS-y                                   += $(LIBS_IBVERBS_STATIC)
 else
-ifeq ($(findstring y,$(CONFIG_RTE_LIBRTE_MLX5_PMD)$(CONFIG_RTE_LIBRTE_MLX5_VDPA_PMD)),y)
+ifeq ($(findstring y,$(CONFIG_RTE_LIBRTE_MLX5_PMD)$(CONFIG_RTE_LIBRTE_MLX5_VDPA_PMD)$(CONFIG_RTE_LIBRTE_MLX5_REGEX_PMD)),y)
 _LDLIBS-y                                   += -libverbs -lmlx5
 endif
 _LDLIBS-$(CONFIG_RTE_LIBRTE_MLX4_PMD)       += -libverbs -lmlx4
