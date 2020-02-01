@@ -8,16 +8,17 @@
 #include <rte_errno.h>
 #include <rte_bus_pci.h>
 #include <rte_pci.h>
-
-#include <mlx5_glue.h>
-#include <mlx5_common.h>
-#include <mlx5_devx_cmds.h>
-#include <mlx5_prm.h>
-
 #include <rte_regexdev_driver.h>
 
+#include <infiniband/mlx5dv.h>
+#include <mlx5_glue.h>
+#include <mlx5_common.h>
+#include <mlx5_prm.h>
+
+#include "mlx5_regex.h"
 #include "mlx5_regex_utils.h"
 #include "mlx5.h"
+#include "rxp-csrs.h"
 
 static TAILQ_HEAD(mlx5_regex_privs, mlx5_regex_priv) priv_list =
 					      TAILQ_HEAD_INITIALIZER(priv_list);
@@ -72,6 +73,34 @@ static int mlx5_regex_engines_status(struct ibv_context *ctx, int num_engines)
 	return 0;
 }
 
+static int mlx5_regex_setup_dev(struct mlx5_regex_priv *priv)
+{
+	struct mlx5dv_pd mlx5_pd = {};
+	struct mlx5dv_obj dv_obj;
+	int ret;
+
+	ret = mlx5dv_devx_query_eqn(priv->ctx, 0, &priv->eqn);
+	if (ret || !priv->eqn) {
+		if (!ret)
+			ret = EINVAL;
+		return ret;
+	}
+
+	priv->pd = ibv_alloc_pd(priv->ctx);
+	if (!priv->pd)
+		return ENOMEM;
+	dv_obj.pd.in = priv->pd;
+	dv_obj.pd.out = &mlx5_pd;
+	mlx5dv_init_obj(&dv_obj, MLX5DV_OBJ_PD);
+	priv->pdn = mlx5_pd.pdn;
+	return 0;
+}
+
+static void mlx5_regex_cleanup_dev(struct mlx5_regex_priv *priv)
+{
+	ibv_dealloc_pd(priv->pd);
+}
+
 static const struct rte_regex_dev_ops dev_ops;
 
 /**
@@ -114,6 +143,7 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 		rte_errno = ENODEV;
 		return -rte_errno;
 	}
+
 	ret = mlx5_devx_cmd_query_hca_attr(ctx, &attr);
 	if (ret) {
 		DRV_LOG(ERR, "Unable to read HCA capabilities.");
@@ -146,6 +176,12 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	sprintf(&priv->regex_dev.dev_name[0], "poc");
 	priv->regex_dev.dev_ops = &dev_ops;
 
+	ret = mlx5_regex_setup_dev(priv);
+	if (ret) {
+		rte_errno = ret;
+		goto dev_error;
+	}
+
 	pthread_mutex_lock(&priv_list_lock);
 	TAILQ_INSERT_TAIL(&priv_list, priv, next);
 	pthread_mutex_unlock(&priv_list_lock);
@@ -162,6 +198,7 @@ error:
 	pthread_mutex_lock(&priv_list_lock);
 	TAILQ_REMOVE(&priv_list, priv, next);
 	pthread_mutex_unlock(&priv_list_lock);
+dev_error:
 	rte_free(priv);
 	return rte_errno;
 }
@@ -183,6 +220,7 @@ static int mlx5_regex_pci_remove(struct rte_pci_device *pci_dev)
 
 	regex_dev = &priv->regex_dev;
 	rte_regex_dev_unregister(regex_dev);
+	mlx5_regex_cleanup_dev(priv);
 
 	pthread_mutex_lock(&priv_list_lock);
 	TAILQ_REMOVE(&priv_list, priv, next);

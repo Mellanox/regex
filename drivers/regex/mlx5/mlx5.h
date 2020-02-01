@@ -9,6 +9,9 @@
 struct mlx5_regex_priv {
 	struct rte_regex_dev regex_dev;
 	struct ibv_context *ctx; /* Device context. */
+	struct ibv_pd *pd;
+	uint32_t pdn;
+	uint32_t eqn;
 
 	TAILQ_ENTRY(mlx5_regex_priv) next;
 	struct rte_pci_device *pci_dev;
