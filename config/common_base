@@ -1097,6 +1097,11 @@ CONFIG_RTE_TEST_PMD_RECORD_BURST_STATS=n
 CONFIG_RTE_TEST_BBDEV=y
 
 #
+# Compile the REGEX dev test application
+#
+CONFIG_RTE_TEST_REGEXDEV=y
+
+#
 # Compile the compression performance application
 #
 CONFIG_RTE_APP_COMPRESS_PERF=y

@@ -426,6 +426,7 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 		rte_errno = ret;
 		goto db_error;
 	}
+	sprintf(&priv->regex_dev.dev_name[0], "poc");
 
 	pthread_mutex_lock(&priv_list_lock);
 	TAILQ_INSERT_TAIL(&priv_list, priv, next);
