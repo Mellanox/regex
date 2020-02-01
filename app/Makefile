@@ -28,4 +28,8 @@ ifeq ($(CONFIG_RTE_LIBRTE_EVENTDEV),y)
 DIRS-$(CONFIG_RTE_APP_EVENTDEV) += test-eventdev
 endif
 
+ifeq ($(CONFIG_RTE_LIBRTE_REGEXDEV),y)
+DIRS-$(CONFIG_RTE_TEST_REGEXDEV) += test-regexdev
+endif
+
 include $(RTE_SDK)/mk/rte.subdir.mk
