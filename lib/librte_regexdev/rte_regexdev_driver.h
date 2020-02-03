@@ -40,11 +40,8 @@ int rte_regex_dev_register(struct rte_regex_dev *dev);
  *
  * @param dev
  *   Device to be released.
- *
- * @return
- *   0 on success, Negative errno value on error.
  */
-int rte_regex_dev_unregister(struct rte_regex_dev *dev);
+void rte_regex_dev_unregister(struct rte_regex_dev *dev);
 
 #ifdef __cplusplus
 }
