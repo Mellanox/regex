@@ -51,6 +51,11 @@ int rte_regex_dev_register(struct rte_regex_dev *dev)
 	uint16_t dev_id;
 	int res = 0;
 
+	if (dev->dev_ops == NULL) {
+		RTE_REGEXDEV_LOG(ERR, "RegEx device invalid device ops\n");
+		return -EINVAL;
+	}
+
 	rte_spinlock_lock(&regex_shared_data_lock);
 	if (regex_dev_allocated(dev->dev_name) != NULL) {
 		RTE_REGEXDEV_LOG
