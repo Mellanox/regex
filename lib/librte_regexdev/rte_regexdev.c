@@ -46,8 +46,7 @@ regex_dev_allocated(const char *name)
 	return NULL;
 }
 
-int
-rte_regex_dev_register(struct rte_regex_dev *dev)
+int rte_regex_dev_register(struct rte_regex_dev *dev)
 {
 	uint16_t dev_id;
 	int res = 0;
@@ -75,25 +74,18 @@ unlock_register:
 	return res;
 }
 
-int
-rte_regex_dev_unregister(struct rte_regex_dev *dev)
+void rte_regex_dev_unregister(struct rte_regex_dev *dev)
 {
-	int res = 0;
-
-	if (dev == NULL)
-		return -EINVAL;
 	rte_spinlock_lock(&regex_shared_data_lock);
 	if (regex_dev_allocated(dev->dev_name) == NULL) {
 		RTE_REGEXDEV_LOG
 			(ERR, "RegEx device with name %s isn't allocated\n",
 			dev->dev_name);
-		res = -EINVAL;
 		goto unlock_unregister;
 	}
 	regex_devices[dev->dev_id] = NULL;
 unlock_unregister:
 	rte_spinlock_unlock(&regex_shared_data_lock);
-	return res;
 }
 
 uint8_t
