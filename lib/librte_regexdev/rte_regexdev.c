@@ -20,6 +20,8 @@ static struct {
 
 static struct rte_regex_dev rte_regex_devices[RTE_MAX_REGEXDEV_DEVS];
 
+int rte_regex_dev_logtype;
+
 /* spinlock for shared data allocation */
 static rte_spinlock_t rte_regex_shared_data_lock = RTE_SPINLOCK_INITIALIZER;
 
