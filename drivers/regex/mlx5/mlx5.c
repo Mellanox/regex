@@ -2,6 +2,7 @@
  * Copyright 2019 Mellanox Technologies, Ltd
  */
 #include <unistd.h>
+#include <sys/mman.h>
 
 #include <rte_malloc.h>
 #include <rte_log.h>
@@ -15,6 +16,7 @@
 #include <mlx5_common.h>
 #include <mlx5_prm.h>
 
+#include "mlx5.h"
 #include "mlx5_regex.h"
 #include "mlx5_regex_utils.h"
 #include "rxp-csrs.h"
@@ -24,6 +26,17 @@ static TAILQ_HEAD(mlx5_regex_privs, mlx5_regex_priv) priv_list =
 static pthread_mutex_t priv_list_lock = PTHREAD_MUTEX_INITIALIZER;
 int mlx5_regex_logtype;
 
+struct mlx5_regex_db {
+	/* TODO: refer to struct rxp_database of Yuval code */
+	void *raw_mem;
+	struct mlx5dv_devx_umem *umem;
+	/* TODO: refer to Yuval's struct mlx5_database_ctx */
+	struct mlx5_database_ctx umem_ctx;
+};
+
+#define MLX5_REGEX_MAX_RXP_ENGINES 2
+#define MLX5_REGEX_DB_MEM_SIZE (1u << 27u)
+
 /* TODO: move to its own header file */
 struct mlx5_regex_priv {
 	struct rte_regex_dev regex_dev;
@@ -32,6 +45,9 @@ struct mlx5_regex_priv {
 	uint32_t pdn;
 	uint32_t eqn;
 	struct mlx5dv_devx_uar *uar;
+
+	struct mlx5_regex_db *db_desc;
+	int num_db_desc;
 
 	TAILQ_ENTRY(mlx5_regex_priv) next;
 	struct rte_pci_device *pci_dev;
@@ -125,6 +141,77 @@ static void mlx5_regex_cleanup_dev(struct mlx5_regex_priv *priv)
 	ibv_dealloc_pd(priv->pd);
 }
 
+static int
+mlx5_regex_setup_db_one(struct mlx5_regex_priv *priv,
+			struct mlx5_regex_db *db)
+{
+	void *raw_mem;
+	int err;
+
+	raw_mem = mmap(NULL, MLX5_REGEX_DB_MEM_SIZE, PROT_READ | PROT_WRITE,
+		       MAP_SHARED | MAP_ANONYMOUS | MAP_POPULATE | MAP_HUGETLB,
+		       -1, 0);
+	if (!raw_mem)
+		return ENOMEM;
+
+	db->raw_mem = raw_mem;
+	/* Register the memory with Mellanox */
+	db->umem = mlx5dv_devx_umem_reg(priv->ctx, raw_mem,
+                                        MLX5_REGEX_DB_MEM_SIZE, 7);
+	if (!db->umem) {
+		err = ENOMEM;
+		goto umem_err;
+	}
+
+	return 0;
+
+umem_err:
+	munmap(db->raw_mem, MLX5_REGEX_DB_MEM_SIZE);
+	return err;
+}
+
+static void mlx5_regex_cleanup_db_one(struct mlx5_regex_db *db)
+{
+	if (db->umem)
+		mlx5dv_devx_umem_dereg(db->umem);
+	if (db->raw_mem)
+		munmap(db->raw_mem, MLX5_REGEX_DB_MEM_SIZE);
+}
+
+static int mlx5_regex_setup_db(struct mlx5_regex_priv *priv, int num_engines)
+{
+	int ret;
+	int i;
+
+	priv->db_desc = calloc(num_engines, sizeof(*priv->db_desc));
+	if (!priv->db_desc)
+		return ENOMEM;
+
+	for (i = 0; i < num_engines; i++) {
+		ret = mlx5_regex_setup_db_one(priv, &priv->db_desc[i]);
+		if (ret)
+			goto cleanup;
+	}
+	priv->num_db_desc = num_engines;
+	return 0;
+
+cleanup:
+	for (; i >= 0; i--)
+		mlx5_regex_cleanup_db_one(&priv->db_desc[i]);
+	free(priv->db_desc);
+	return ret;
+}
+
+static void mlx5_regex_cleanup_db(struct mlx5_regex_priv *priv)
+{
+	int i;
+
+	for (i = priv->num_db_desc - 1; i >= 0; i--)
+		mlx5_regex_cleanup_db_one(&priv->db_desc[i]);
+
+	free(priv->db_desc);
+}
+
 static const struct rte_regex_dev_ops dev_ops;
 
 /**
@@ -188,6 +275,7 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 		rte_errno = ENOMEM;
 		return -rte_errno;
 	}
+
 	priv->ctx = ctx;
 	priv->pci_dev = pci_dev;
 	sprintf(&priv->regex_dev.dev_name[0], "poc");
@@ -197,6 +285,13 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	if (ret) {
 		rte_errno = ret;
 		goto dev_error;
+	}
+
+	ret = mlx5_regex_setup_db(priv, attr.regexp_num_of_engines);
+	if (ret) {
+		DRV_LOG(ERR, "Failed to setup database memory.");
+		rte_errno = ret;
+		goto db_error;
 	}
 
 	pthread_mutex_lock(&priv_list_lock);
@@ -215,6 +310,9 @@ error:
 	pthread_mutex_lock(&priv_list_lock);
 	TAILQ_REMOVE(&priv_list, priv, next);
 	pthread_mutex_unlock(&priv_list_lock);
+	mlx5_regex_cleanup_db(priv);
+db_error:
+	mlx5_regex_cleanup_dev(priv);
 dev_error:
 	rte_free(priv);
 	return rte_errno;
@@ -237,6 +335,7 @@ static int mlx5_regex_pci_remove(struct rte_pci_device *pci_dev)
 
 	regex_dev = &priv->regex_dev;
 	rte_regex_dev_unregister(regex_dev);
+	mlx5_regex_cleanup_db(priv);
 	mlx5_regex_cleanup_dev(priv);
 
 	pthread_mutex_lock(&priv_list_lock);
