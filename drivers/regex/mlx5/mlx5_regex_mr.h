@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause
  * Copyright 2018 6WIND S.A.
- * Copyright 2018 Mellanox Technologies, Ltd
+ * Copyright 2020 Mellanox Technologies, Ltd
  */
 
 #ifndef MLX5_REGEX_MR_H_
@@ -65,5 +65,12 @@ struct mlx5_mr_ctrl {
 } __rte_packed;
 
 LIST_HEAD(mlx5_mr_list, mlx5_mr);
+
+int mlx5_mr_btree_init(struct mlx5_mr_btree *bt, int n, int socket);
+void mlx5_mr_btree_free(struct mlx5_mr_btree *bt);
+
+uint32_t mlx5_regex_mr_addr2mr_bh(struct rte_regex_dev *dev,
+			    struct mlx5_mr_ctrl *mr_ctrl, uintptr_t addr);
+void mlx5_regex_mr_release(struct rte_regex_dev *dev);
 
 #endif /* MLX5_REGEX_MR_H_ */
