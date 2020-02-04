@@ -212,7 +212,17 @@ static void mlx5_regex_cleanup_db(struct mlx5_regex_priv *priv)
 	free(priv->db_desc);
 }
 
-static const struct rte_regex_dev_ops dev_ops;
+static int mlx5_regex_dev_info_get(struct rte_regex_dev *dev __rte_unused,
+				   struct rte_regex_dev_info *info)
+{
+	info->max_queue_pairs = 32;
+	info->max_scatter_gather = 1;
+	return 0;
+}
+
+static const struct rte_regex_dev_ops dev_ops = {
+	.dev_info_get = mlx5_regex_dev_info_get,
+};
 
 /**
  * DPDK callback to register a PCI device.
