@@ -37,22 +37,6 @@ struct mlx5_regex_db {
 #define MLX5_REGEX_MAX_RXP_ENGINES 2
 #define MLX5_REGEX_DB_MEM_SIZE (1u << 27u)
 
-/* TODO: move to its own header file */
-struct mlx5_regex_priv {
-	struct rte_regex_dev regex_dev;
-	struct ibv_context *ctx; /* Device context. */
-	struct ibv_pd *pd;
-	uint32_t pdn;
-	uint32_t eqn;
-	struct mlx5dv_devx_uar *uar;
-
-	struct mlx5_regex_db *db_desc;
-	int num_db_desc;
-
-	TAILQ_ENTRY(mlx5_regex_priv) next;
-	struct rte_pci_device *pci_dev;
-};
-
 /* TODO: move t mlx5/common and reuse with vpda */
 static struct ibv_device *
 mlx5_regex_get_ib_device_match(const struct rte_pci_addr *addr)
