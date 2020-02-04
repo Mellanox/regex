@@ -40,7 +40,7 @@ regex_dev_allocated(const char *name)
 
 	for (i = 0; i < RTE_MAX_REGEXDEV_DEVS; i++) {
 		if (regex_devices[i] != NULL)
-			if (strcmp(name, regex_devices[i]->dev_name))
+			if (!strcmp(name, regex_devices[i]->dev_name))
 				return regex_devices[i];
 	}
 	return NULL;
@@ -114,7 +114,7 @@ rte_regex_dev_get_dev_id(const char *name)
 	rte_spinlock_lock(&regex_shared_data_lock);
 	for (i = 0; i < RTE_MAX_REGEXDEV_DEVS; i++) {
 		if (regex_devices[i] != NULL)
-			if (strcmp(name, regex_devices[i]->dev_name)) {
+			if (!strcmp(name, regex_devices[i]->dev_name)) {
 				id = regex_devices[i]->dev_id;
 				break;
 			}
