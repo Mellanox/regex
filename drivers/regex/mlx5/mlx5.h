@@ -6,9 +6,23 @@
 
 #include "mlx5_regex_mr.h"
 
+#define MLX5_REGEX_MAX_QUEUES 32
+
+#define MLX5_REGEX_MAX_JOBS 64
+
 struct mlx5_database_ctx {
 	uint32_t umem_id;
 	uint64_t offset;
+};
+
+struct mlx5_regex_job {
+	uint64_t user_id;
+	int job_id;
+} __rte_cached_aligned;
+
+struct mlx5_regex_queues {
+	int handle;
+	struct mlx5_regex_job jobs[MLX5_REGEX_MAX_JOBS];
 };
 
 struct mlx5_regex_priv {
@@ -17,11 +31,11 @@ struct mlx5_regex_priv {
 	struct ibv_pd *pd;
 	uint32_t pdn;
 	uint32_t eqn;
+	uint16_t nb_queues;
+	struct mlx5_regex_queues queues[MLX5_REGEX_MAX_QUEUES];
 	struct mlx5dv_devx_uar *uar;
-
 	struct mlx5_regex_db *db_desc;
 	int num_db_desc;
-
 	TAILQ_ENTRY(mlx5_regex_priv) next;
 	struct rte_pci_device *pci_dev;
 	struct {
