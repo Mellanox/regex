@@ -9,6 +9,8 @@
 #include <mlx5_devx_cmds.h>
 #include <mlx5_prm.h>
 
+#define REGEX_MLX5_NO_REAL_HW 1
+
 struct mlx5_regex_wqe_ctrl_seg {
        __be32 le_subset_id_0_subset_id_1;
        __be32 ctrl_subset_id_2_subset_id_3;

@@ -20,6 +20,7 @@
 #include "mlx5_regex.h"
 #include "mlx5_regex_utils.h"
 #include "rxp-csrs.h"
+#include "rxp-api.h"
 
 static TAILQ_HEAD(mlx5_regex_privs, mlx5_regex_priv) priv_list =
 					      TAILQ_HEAD_INITIALIZER(priv_list);
@@ -199,13 +200,68 @@ static void mlx5_regex_cleanup_db(struct mlx5_regex_priv *priv)
 static int mlx5_regex_dev_info_get(struct rte_regex_dev *dev __rte_unused,
 				   struct rte_regex_dev_info *info)
 {
-	info->max_queue_pairs = 32;
+	info->max_queue_pairs = MLX5_REGEX_MAX_QUEUES;
 	info->max_scatter_gather = 1;
+	info->max_matches = 256;
 	return 0;
+}
+
+/**
+ * DPDK callback to configure the device.
+ *
+ * Configure the regex device.
+ *
+ * @param dev
+ *   Pointer to Ethernet device structure.
+ * @param cfg
+ *   Pointer to the configuration structure.
+ *
+ * @return
+ *   0 on success, a negative errno value otherwise and rte_errno is set.
+ */
+static int
+mlx5_regex_dev_configure(struct rte_regex_dev *dev __rte_unused,
+			 const struct rte_regex_dev_config *cfg)
+{
+	struct mlx5_regex_priv *priv = container_of(dev,
+						    struct mlx5_regex_priv,
+						    regex_dev);
+	int i;
+
+	/* open queues. */
+	if (cfg->nb_queue_pairs >= MLX5_REGEX_MAX_QUEUES) {
+		DRV_LOG(ERR, "To many queue pairs requested %d, max is %d",
+			cfg->nb_queue_pairs, MLX5_REGEX_MAX_QUEUES);
+		rte_errno = ENOMEM;
+		return -rte_errno;
+	}
+	priv->nb_queues = cfg->nb_max_matches;
+	for (i = 0; i < priv->nb_queues; i++) {
+		
+		priv->queues[i].handle = rxp_open(0);
+		if (priv->queues[i].handle < 0) {
+			DRV_LOG(ERR, "can't open a queue");
+			rte_errno = ENOMEM;
+			goto error;
+		}
+	}		
+	
+	//rule_db
+	if (cfg->rule_db_len) {
+		
+	}
+	return 0;	
+error:
+	for (i--; i >= 0; i--) {
+		rxp_close(priv->queues[i].handle);
+	} 
+						
+	return -rte_errno;
 }
 
 static const struct rte_regex_dev_ops dev_ops = {
 	.dev_info_get = mlx5_regex_dev_info_get,
+	.dev_configure = mlx5_regex_dev_configure,
 };
 
 /**
@@ -231,6 +287,7 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	struct ibv_context *ctx;
 	int ret;
 
+	printf("oooOri in probe function \n");
 	if (!ibv) {
 		DRV_LOG(ERR, "No matching IB device for PCI slot "
 			PCI_PRI_FMT ".", pci_dev->addr.domain,
@@ -255,12 +312,16 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 		rte_errno = ENOTSUP;
 		return -rte_errno;
 	} else {
+#ifndef REGEX_MLX5_NO_REAL_HW
 		if (!attr.regex || attr.regexp_num_of_engines == 0) {
 			DRV_LOG(ERR, "Not enough capabilities to support regex,"
 				" maybe old FW/OFED version?");
 			rte_errno = ENOTSUP;
 			return -rte_errno;
 		}
+#else
+		attr.regexp_num_of_engines = 2;
+#endif
 	}
 	priv = rte_zmalloc("mlx5 regex device private", sizeof(*priv),
 			   RTE_CACHE_LINE_SIZE);
