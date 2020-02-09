@@ -813,7 +813,7 @@ int mlnx_read_resp(struct rxp_queue *rxp_queue, uint8_t *buf, size_t buf_size,
             //TODO: where is regexp_metadata declared...?
             //      Possibly add to sq_buff structure.
             match_count = DEVX_GET(regexp_metadata,
-                                rxp_queue->sq_buf[i].metadata_p, match_count);
+                                (uint8_t *)rxp_queue->sq_buf[i].metadata_p + 32, match_count);
 
             if (match_count < 0)
             {
@@ -846,7 +846,7 @@ int mlnx_read_resp(struct rxp_queue *rxp_queue, uint8_t *buf, size_t buf_size,
             /* Continue to copy response data to app */
             //TODO: check Endianess here?
             //      As may need to read from regexp_metadata struct?
-            memcpy(buf, rxp_queue->sq_buf[i].metadata_p,
+            memcpy(buf, (uint8_t*)rxp_queue->sq_buf[i].metadata_p + 32,
                     sizeof(struct rxp_response_desc));
 
             //TODO: Yuval is this correct way to get output_p or we need to do DEVX_get?
