@@ -551,7 +551,7 @@ void mlx5dv_set_metadata_seg(struct mlx5_wqe_metadata_seg *seg,
 // Return work_id, or -1 in case of err
 int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 			 struct mlx5_regex_wqe_ctrl_seg *regex_ctrl_seg,
-			 unsigned int metadata_lkey,
+			 struct mlx5_wqe_data_seg *metadata,
 			 struct mlx5_wqe_data_seg *input,
 			 struct mlx5_wqe_data_seg *output,
 			 unsigned int qid)
@@ -577,7 +577,7 @@ int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 	meta_seg = (struct mlx5_wqe_metadata_seg *)((uint8_t*)ctrl_seg + sizeof(*ctrl_seg));
 	mlx5dv_set_metadata_seg(meta_seg,
 				regex_ctrl_seg->ctrl_subset_id_2_subset_id_3,
-				metadata_lkey, 0);
+				metadata->lkey, metadata->addr);
 
 	memcpy((uint8_t*)meta_seg + sizeof(*meta_seg), input, sizeof(*input));
 	memcpy((uint8_t*)meta_seg + sizeof(*meta_seg) + sizeof(*input),

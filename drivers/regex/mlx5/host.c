@@ -898,6 +898,7 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
     struct rxp_job_desc *job;
     uint16_t joblen = 0;
     uint32_t i, num_jobs_processed = 0;
+    struct mlx5_wqe_data_seg metadata_seg;
 
     /* Check if user trying to submit more jobs than SQs? */
     if (job_count >= NUM_SQS)
@@ -978,13 +979,16 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
                                     rxp_queue->sq_buf[i].output_buff),
                                 (uintptr_t)rxp_queue->sq_buf[i].output_p);
 
+	    mlx5dv_set_data_seg(&metadata_seg, 64,
+			    	mlx5_regex_get_lkey(rxp_queue->sq_buf[i].metadata_buff),
+				(uintptr_t)rxp_queue->sq_buf[i].metadata_p);
+
             /* Return work_id, or -1 in case of err */
             rxp_queue->sq_buf[i].work_id = mlx5_regex_send_work(
                                 rxp_queue->rxp_job_ctx,
                                 &rxp_queue->sq_buf[i].ctrl_seg,
-                                mlx5_regex_get_lkey(
-                                    rxp_queue->sq_buf[i].metadata_buff),
-                                &rxp_queue->sq_buf[i].input_seg,
+                                &metadata_seg,
+				&rxp_queue->sq_buf[i].input_seg,
                                 &rxp_queue->sq_buf[i].output_seg, i);
 
             if (rxp_queue->sq_buf[i].work_id > -1)
