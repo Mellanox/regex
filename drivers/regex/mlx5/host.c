@@ -1032,7 +1032,7 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
  *          - If have more queue available to send jobs then tx_ready = true
  *          - If polling function returns success (i.e. 1) then some job
  *            response has returned so return rx_ready = true
- *          mlx5_regex_poll(): Return 1 in case of success, -1 in case of error,
+ *          mlx5_regex_poll(): Return work_id in case of success, -1 in case of error,
  *          0 if no completion
  */
 int mlnx_poll(struct rxp_queue *rxp_queue, bool *rx_ready, bool *tx_ready)
@@ -1051,8 +1051,7 @@ int mlnx_poll(struct rxp_queue *rxp_queue, bool *rx_ready, bool *tx_ready)
         {
             //TODO: Check if can simply use work_id = "i", not sure if work_id
             //      maps SQ's if only 1 job per SQ!?
-            ret = mlx5_regex_poll(rxp_queue->rxp_job_ctx, i,
-                                   rxp_queue->sq_buf[i].work_id);
+            ret = mlx5_regex_poll(rxp_queue->rxp_job_ctx, i);
 
             /* 1 = response waiting, 0 = no completion, -1 = error */
             if (ret > 0)
