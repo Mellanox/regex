@@ -95,9 +95,9 @@ int mlx5_regex_send_nop(struct mlx5_regex_ctx *ctx,
 /*
  * Polls for completion of a job posted on a queue.
  * This function is non-blocking.
- * Returns 1 in case of success. -1 in case of error, 0 if no completion
+ * Returns work_id in case of success. -1 in case of error, 0 if no completion
  */
-int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sq, unsigned int work_id);
+int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sq);
 
 struct mlx5_regex_buff;
 

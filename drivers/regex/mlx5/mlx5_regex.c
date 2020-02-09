@@ -626,8 +626,7 @@ int mlx5_regex_send_nop(struct mlx5_regex_ctx *ctx, unsigned int qid)
 	return work_id;
 }
 
-int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sqid,
-		    unsigned int work_id)
+int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sqid)
 {
 	struct mlx5_regex_sq *sq = &ctx->sqs[sqid];
 	struct mlx5_cqe64 *cqe;
@@ -645,10 +644,6 @@ int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sqid,
 		}
 	}
 
-	if (work_id != cqe->wqe_id) {
-		return 0;
-	}
-
 	sq->cq.ci++;
 	asm volatile("" ::: "memory");
 	sq->cq.cq_dbr[0] = htobe32(sq->cq.ci & 0xffffff);
@@ -657,7 +652,7 @@ int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sqid,
 		       mlx5dv_get_cqe_opcode(cqe), be32toh(cqe->byte_cnt));
 		return -1;
 	}
-	return 1;
+	return cqe->wqe_id;
 }
 
 struct mlx5_regex_buff {
