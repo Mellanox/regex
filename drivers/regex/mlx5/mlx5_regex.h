@@ -81,7 +81,7 @@ struct ibv_contxt *mlx5_regex_ibv_ctx_get(struct mlx5_regex_ctx * ctx);
  */
 int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 			 struct mlx5_regex_wqe_ctrl_seg *seg,
-			 unsigned int metadata_lkey,
+			 struct mlx5_wqe_data_seg *metadata,
 			 struct mlx5_wqe_data_seg *input,
 			 struct mlx5_wqe_data_seg *output,
 			 unsigned int sq);
