@@ -237,15 +237,17 @@ mlx5_regex_dev_configure(struct rte_regex_dev *dev __rte_unused,
 	}
 	priv->nb_queues = cfg->nb_max_matches;
 	for (i = 0; i < priv->nb_queues; i++) {
-		
 		priv->queues[i].handle = rxp_open(0);
 		if (priv->queues[i].handle < 0) {
 			DRV_LOG(ERR, "can't open a queue");
 			rte_errno = ENOMEM;
 			goto error;
 		}
-	}		
-	
+		priv->queues[i].resp_ctx.buf_size = RXP_RESP_BUF_SIZE_MIN;
+		priv->queues[i].resp_ctx.buf = rte_calloc(__func__, 1,
+							  RXP_RESP_BUF_SIZE_MIN,
+							  0);
+	}
 	//rule_db
 	if (cfg->rule_db_len) {
 		
@@ -254,6 +256,7 @@ mlx5_regex_dev_configure(struct rte_regex_dev *dev __rte_unused,
 error:
 	for (i--; i >= 0; i--) {
 		rxp_close(priv->queues[i].handle);
+		rte_free(priv->queues[i].resp_ctx.buf);
 	} 
 						
 	return -rte_errno;

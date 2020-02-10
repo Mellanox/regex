@@ -5,6 +5,7 @@
 #include <rte_rwlock.h>
 
 #include "mlx5_regex_mr.h"
+#include "rxp-api.h"
 
 #define MLX5_REGEX_MAX_QUEUES 32
 
@@ -18,10 +19,14 @@ struct mlx5_database_ctx {
 struct mlx5_regex_job {
 	uint64_t user_id;
 	int job_id;
+	int used;
 } __rte_cached_aligned;
 
 struct mlx5_regex_queues {
 	int handle;
+	uint32_t pi;
+	uint32_t ci;
+	struct rxp_response_batch resp_ctx;
 	struct mlx5_regex_job jobs[MLX5_REGEX_MAX_JOBS];
 };
 
@@ -47,4 +52,8 @@ struct mlx5_regex_priv {
 	} mr;
 };
 
+int mlx5_regex_dev_enqueue(struct rte_regex_dev *dev, uint16_t qp_id,
+			   struct rte_regex_ops **ops, uint16_t nb_ops);
+int mlx5_regex_dev_dequeue(struct rte_regex_dev *dev, uint16_t qp_id,
+			   struct rte_regex_ops **ops, uint16_t nb_ops);
 #endif
