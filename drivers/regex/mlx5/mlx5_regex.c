@@ -52,6 +52,9 @@ static int
 regex_database_set(struct ibv_context *ctx, int engine_id,
 		   const struct mlx5_database_ctx *db_ctx, int stop, int go)
 {
+#ifdef REGEX_MLX5_NO_REAL_HW
+	return 0;
+#endif
 	uint32_t out[DEVX_ST_SZ_DW(set_regexp_params_out)] = {};
 	uint32_t in[DEVX_ST_SZ_DW(set_regexp_params_in)] = {};
 	int err;
@@ -160,6 +163,9 @@ int
 mlx5_regex_database_query(struct ibv_context *ctx, int engine_id,
 			  struct mlx5_database_ctx *db_ctx)
 {
+#ifdef REGEX_MLX5_NO_REAL_HW
+	return 0;
+#endif
 	uint32_t out[DEVX_ST_SZ_DW(query_regexp_params_out)] = {};
 	uint32_t in[DEVX_ST_SZ_DW(query_regexp_params_in)] = {};
 	int err;
@@ -200,6 +206,9 @@ int
 mlx5_regex_register_write(struct ibv_context *ctx, int engine_id,
 			  uint32_t addr, uint32_t data)
 {
+#ifdef REGEX_MLX5_NO_REAL_HW
+	return 0;
+#endif
 	uint32_t out[DEVX_ST_SZ_DW(set_regexp_register_out)] = {};
 	uint32_t in[DEVX_ST_SZ_DW(set_regexp_register_in)] = {};
 	int err;
@@ -238,6 +247,9 @@ int
 mlx5_regex_register_read(struct ibv_context *ctx, int engine_id,
 			 uint32_t addr, uint32_t *data)
 {
+#ifdef REGEX_MLX5_NO_REAL_HW
+	return 0;
+#endif
 	uint32_t out[DEVX_ST_SZ_DW(query_regexp_register_out)] = {};
 	uint32_t in[DEVX_ST_SZ_DW(query_regexp_register_in)] = {};
 	int err;
@@ -259,6 +271,7 @@ mlx5_regex_register_read(struct ibv_context *ctx, int engine_id,
 static int mlx5_regex_query_cap(struct ibv_context *ctx,
 				struct regex_caps *caps)
 {
+#ifndef REGEX_MLX5_NO_REAL_HW 
 	uint32_t out[DEVX_ST_SZ_DW(query_hca_cap_out)] = {};
 	uint32_t in[DEVX_ST_SZ_DW(query_hca_cap_in)] = {};
 	int err;
@@ -281,11 +294,17 @@ static int mlx5_regex_query_cap(struct ibv_context *ctx,
 					capability.cmd_hca_cap.regexp_num_of_engines);
 	caps->log_crspace_size = DEVX_GET(query_hca_cap_out, out,
 					  capability.cmd_hca_cap.regexp_log_crspace_size);
+#else	
+	caps->supported = 1;
+	caps->num_of_engines = 2;
+	caps->log_crspace_size = 32;
+#endif
 	return 0;
 }
 
 int mlx5_regex_is_supported(struct ibv_context *ibv_ctx)
 {
+
 	struct regex_caps caps;
 	int err;
 
@@ -545,7 +564,6 @@ void mlx5dv_set_metadata_seg(struct mlx5_wqe_metadata_seg *seg,
 #define	MLX5_OPCODE_MMO	0x2f
 #define	MLX5_OPC_MOD_MMO_REGEX 0x4
 #define	ALWAYS_COMP 0x8
-
 #define SIZE_IN_DS(SEG) (sizeof(SEG)/16 + !!sizeof(SEG)%16)
 
 // Return work_id, or -1 in case of err
@@ -556,6 +574,7 @@ int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 			 struct mlx5_wqe_data_seg *output,
 			 unsigned int qid)
 {
+#ifndef REGEX_MLX5_NO_REAL_HW
 	struct mlx5_wqe_metadata_seg *meta_seg;
 	struct mlx5_wqe_ctrl_seg *ctrl_seg;
 	struct mlx5_regex_sq *sq;
@@ -593,6 +612,23 @@ int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 	int work_id = sq->pi;
 	sq->pi = (sq->pi+1)%MAX_WQE_INDEX;
 	return work_id;
+#else
+	int work_id;
+	unsigned int i, match;
+	
+	(void) regex_ctrl_seg;
+	uint8_t *metadata_p = (uint8_t *)metadata->addr;
+	uint8_t *output_p = (uint8_t *)output->addr;
+
+	match =  rand()%(input->byte_count/8);
+	mlx5_regex_set_metadata(metadata_p, 0, 0, 0, 0, match, match +1, 0, 0);
+	for(i = 0; i < match && i < output->byte_count/4; i++) {
+		output_p[i] = rand();
+	}
+
+	work_id = mlx5_regex_send_nop(ctx, qid);
+	return work_id;
+#endif
 }
 
 // Return work_id, or -1 in case of err
