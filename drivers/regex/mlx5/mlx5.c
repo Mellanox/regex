@@ -18,6 +18,7 @@
 
 #include "mlx5.h"
 #include "mlx5_regex.h"
+#include "mlx5_regex_queue.h"
 #include "mlx5_regex_utils.h"
 #include "rxp-csrs.h"
 
@@ -415,6 +416,8 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	priv->pci_dev = pci_dev;
 	sprintf(&priv->regex_dev.dev_name[0], "poc");
 	priv->regex_dev.dev_ops = &dev_ops;
+	priv->regex_dev.enqueue = mlx5_regex_enqueue;
+	priv->regex_dev.dequeue = mlx5_regex_dequeue;
 
 	ret = mlx5_regex_setup_dev(priv);
 	if (ret) {

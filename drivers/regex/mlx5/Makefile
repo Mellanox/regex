@@ -9,6 +9,7 @@ LIB = librte_pmd_mlx5_regex.a
 # Sources.
 SRCS-$(CONFIG_RTE_LIBRTE_MLX5_REGEX_PMD) += mlx5.c
 SRCS-$(CONFIG_RTE_LIBRTE_MLX5_REGEX_PMD) += mlx5_regex.c
+SRCS-$(CONFIG_RTE_LIBRTE_MLX5_REGEX_PMD) += mlx5_regex_queue.c
 
 # Basic CFLAGS.
 CFLAGS += -O3
