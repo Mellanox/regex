@@ -40,6 +40,10 @@ DPDK_20.02 {
 	mlx5_nl_vf_mac_addr_modify;
 	mlx5_nl_vlan_vmwa_create;
 	mlx5_nl_vlan_vmwa_delete;
+
+	mlx5_common_create_cq;
+	mlx5_common_destroy_cq;
+	mlx5_common_arm_cq;
 };
 
 EXPERIMENTAL {

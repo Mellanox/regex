@@ -9,6 +9,7 @@
 #include <rte_rwlock.h>
 
 #include <mlx5_common_mr.h>
+#include <mlx5_common_cq.h>
 
 struct mlx5_database_ctx {
 	uint32_t umem_id;

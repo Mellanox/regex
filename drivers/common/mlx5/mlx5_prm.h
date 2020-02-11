@@ -419,10 +419,13 @@ struct mlx5_ifc_regexp_metadata_bits {
 /* CQ doorbell index mask. */
 #define MLX5_CI_MASK 0xffffff
 
-/* CQ doorbell offset. */
+/* Ring CQ doorbell offset. */
+#define MLX5_CQ_RING_DB 0
+
+/* Arm CQ doorbell offset. */
 #define MLX5_CQ_ARM_DB 1
 
-/* CQ doorbell offset*/
+/* CQ doorbell address offset. */
 #define MLX5_CQ_DOORBELL 0x20
 
 /* CQE format value. */
