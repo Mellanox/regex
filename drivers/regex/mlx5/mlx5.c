@@ -183,8 +183,77 @@ static int mlx5_regex_dev_info_get(struct rte_regex_dev *dev __rte_unused,
 	return 0;
 }
 
+static int
+mlx5_regex_dev_configure(struct rte_regex_dev *dev,
+			 const struct rte_regex_dev_config *cfg)
+{
+	struct mlx5_regex_priv *priv =
+			container_of(dev, struct mlx5_regex_priv, regex_dev);
+
+	if (!cfg->nb_queue_pairs)
+		return 0;
+	priv->qps = rte_calloc("mlx5 regex qp", cfg->nb_queue_pairs,
+			       sizeof(*priv->qps), 0);
+	if (!priv->qps) {
+		rte_errno = ENOMEM;
+		return -rte_errno;
+	}
+	priv->num_qps = cfg->nb_queue_pairs;
+	return 0;
+}
+
+static int mlx5_regex_dev_qp_setup(struct rte_regex_dev *dev, uint8_t id,
+				   const struct rte_regex_qp_conf *qp_conf)
+{
+	struct mlx5_regex_priv *priv =
+			container_of(dev, struct mlx5_regex_priv, regex_dev);
+	int ret;
+
+	if (id >= priv->num_qps) {
+		rte_errno = EINVAL;
+		return -rte_errno;
+	}
+	priv->qps[id].uar = mlx5dv_devx_alloc_uar(priv->ctx, 0);
+	if (!priv->qps[id].uar) {
+		rte_errno = ENOMEM;
+		return -rte_errno;
+	}
+	ret = mlx5_common_create_cq(priv->ctx, priv->qps[id].uar,
+				    qp_conf->nb_desc, priv->eqn,
+				    &priv->qps[id].cq);
+	if (ret)
+		goto cq_error;
+	ret = mlx5_common_create_sq(priv->ctx, priv->qps[id].uar,
+				    qp_conf->nb_desc, priv->pdn, id,
+				    &priv->qps[id].cq, &priv->qps[id].sq);
+	if (ret)
+		goto sq_error;
+	return 0;
+sq_error:
+	mlx5_common_destroy_cq(&priv->qps[id].cq);
+cq_error:
+	mlx5dv_devx_free_uar(priv->qps[id].uar);
+	return ret;
+}
+
+static void
+mlx5_regex_dev_qp_cleanup(struct mlx5_regex_priv *priv)
+{
+	int i;
+
+	for (i = 0; i < priv->num_qps; i++) {
+		if (priv->qps[i].sq.sq == NULL)
+			continue;
+		mlx5_common_destroy_sq(&priv->qps[i].sq);
+		mlx5_common_destroy_cq(&priv->qps[i].cq);
+		mlx5dv_devx_free_uar(priv->qps[i].uar);
+	}
+}
+
 static const struct rte_regex_dev_ops dev_ops = {
 	.dev_info_get = mlx5_regex_dev_info_get,
+	.dev_configure = mlx5_regex_dev_configure,
+	.dev_qp_setup = mlx5_regex_dev_qp_setup,
 };
 
 /**
@@ -315,6 +384,8 @@ static int mlx5_regex_pci_remove(struct rte_pci_device *pci_dev)
 
 	regex_dev = &priv->regex_dev;
 	rte_regex_dev_unregister(regex_dev);
+	mlx5_regex_dev_qp_cleanup(priv);
+	rte_free(priv->qps);
 	mlx5_regex_cleanup_db(priv);
 	mlx5_regex_cleanup_dev(priv);
 
