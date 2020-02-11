@@ -4,6 +4,7 @@
 #include <rte_regexdev_driver.h>
 #include <rte_rwlock.h>
 
+#include "mlx5_regex_queue.h"
 #include "mlx5_regex_mr.h"
 
 struct mlx5_database_ctx {
@@ -31,6 +32,7 @@ struct mlx5_regex_priv {
 		struct mlx5_mr_list mr_list; /* Registered MR list. */
 		struct mlx5_mr_list mr_free_list; /* Freed MR list. */
 	} mr;
+	struct mlx5_regex_queue *(*queues)[]; /* Device queues */
 };
 
 #endif
