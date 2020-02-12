@@ -44,6 +44,9 @@ DPDK_20.02 {
 	mlx5_common_create_cq;
 	mlx5_common_destroy_cq;
 	mlx5_common_arm_cq;
+
+	mlx5_common_create_sq;
+	mlx5_common_destroy_sq;
 };
 
 EXPERIMENTAL {

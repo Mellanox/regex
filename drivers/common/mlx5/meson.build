@@ -45,6 +45,7 @@ if build
 		'mlx5_common_mp.c',
 		'mlx5_common_mr.c',
 		'mlx5_common_cq.c',
+		'mlx5_common_sq.c',
 		'mlx5_nl.c',
 	)
 	if not pmd_dlopen

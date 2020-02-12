@@ -254,6 +254,12 @@
 /* The alignment needed for WQ buffer. */
 #define MLX5_WQE_BUF_ALIGNMENT 512
 
+/* QP doorbell offset. */
+#define MLX5_QP_DOORBELL 0x800
+
+/* QP doorbell index mask. */
+#define MLX5_QP_CI_MASK 0xffff
+
 /* Completion mode. */
 enum mlx5_completion_mode {
 	MLX5_COMP_ONLY_ERR = 0x0,
