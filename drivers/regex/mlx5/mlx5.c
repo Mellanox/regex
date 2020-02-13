@@ -19,7 +19,6 @@
 #include "mlx5.h"
 #include "mlx5_regex.h"
 #include "mlx5_regex_utils.h"
-#include "mlx5.h"
 #include "rxp-csrs.h"
 
 static TAILQ_HEAD(mlx5_regex_privs, mlx5_regex_priv) priv_list =
@@ -189,6 +188,7 @@ mlx5_regex_dev_configure(struct rte_regex_dev *dev,
 {
 	struct mlx5_regex_priv *priv =
 			container_of(dev, struct mlx5_regex_priv, regex_dev);
+	int err;
 
 	if (!cfg->nb_queue_pairs)
 		return 0;
@@ -198,8 +198,88 @@ mlx5_regex_dev_configure(struct rte_regex_dev *dev,
 		rte_errno = ENOMEM;
 		return -rte_errno;
 	}
+	err = mlx5_mr_btree_init(&priv->mr_scache.cache,
+				 MLX5_MR_BTREE_CACHE_N * 2,
+				 priv->pci_dev->device.numa_node);
+	if (err)
+		return err;
 	priv->num_qps = cfg->nb_queue_pairs;
 	return 0;
+}
+
+static void destroy_qp_resources(struct mlx5_regex_qp *qp, uint16_t nb_desc)
+{
+	struct mlx5_regex_job *job;
+	int i;
+
+	for (i = 0; i < nb_desc; i++) {
+		job = qp->regex_jobs[i];
+		rte_free(BUF_ADDR(&job->resp_iov));
+		rte_free(BUF_ADDR(&job->m_iov));
+		rte_free(job);
+	}
+	rte_free(qp->regex_jobs);
+	mlx5_mr_btree_free(&qp->mr_ctrl.cache_bh);
+}
+
+static int setup_qp_resources(struct mlx5_regex_priv *priv,
+			      struct mlx5_regex_qp *qp, uint16_t nb_desc)
+{
+	struct mlx5_regex_job *job;
+	int ret;
+	int i;
+
+	ret = mlx5_mr_btree_init(&qp->mr_ctrl.cache_bh, MLX5_MR_BTREE_CACHE_N,
+				 priv->pci_dev->device.numa_node);
+	if (ret)
+		return ret;
+	qp->regex_jobs =
+		(struct mlx5_regex_job **)rte_calloc("mlx5 regex jobs", nb_desc,
+						     sizeof(job), 0);
+	if (!qp->regex_jobs) {
+		rte_errno = ENOMEM;
+		goto alloc_jobs_err;
+	}
+	for (i = 0; i < nb_desc; i++) {
+		job = rte_calloc("mlx5 regex job", 1, sizeof(*job), 0);
+		if (!job) {
+			rte_errno = ENOMEM;
+			goto alloc_err;
+		}
+
+		BUF_ADDR(&job->m_iov) = rte_malloc("mlx5 metadata buf",
+						   MLX5_REGEX_METADATA_SIZE, 0);
+		if (!BUF_ADDR(&job->m_iov)) {
+			rte_free(job);
+			rte_errno = ENOMEM;
+			goto alloc_err;
+		}
+		BUF_SIZE(&job->m_iov) = MLX5_REGEX_METADATA_SIZE;
+
+		BUF_ADDR(&job->resp_iov) = rte_malloc("mlx5 response buf",
+						      MLX5_REGEX_RESPONSE_SIZE,
+						      0);
+		if (!BUF_ADDR(&job->resp_iov)) {
+			rte_free(BUF_ADDR(&job->m_iov));
+			rte_free(job);
+			rte_errno = ENOMEM;
+			goto alloc_err;
+		}
+		BUF_SIZE(&job->resp_iov) = MLX5_REGEX_METADATA_SIZE;
+		qp->regex_jobs[i] = job;
+	}
+	return 0;
+alloc_err:
+	while (i--) {
+		job = qp->regex_jobs[i];
+		rte_free(job->resp_iov.buf_addr);
+		rte_free(job->m_iov.buf_addr);
+		rte_free(job);
+	}
+	rte_free(qp->regex_jobs);
+alloc_jobs_err:
+	mlx5_mr_btree_free(&qp->mr_ctrl.cache_bh);
+	return -rte_errno;
 }
 
 static int mlx5_regex_dev_qp_setup(struct rte_regex_dev *dev, uint8_t id,
@@ -228,7 +308,12 @@ static int mlx5_regex_dev_qp_setup(struct rte_regex_dev *dev, uint8_t id,
 				    &priv->qps[id].cq, &priv->qps[id].sq);
 	if (ret)
 		goto sq_error;
+	ret = setup_qp_resources(priv, &priv->qps[id], qp_conf->nb_desc);
+	if (ret)
+		goto res_error;
 	return 0;
+res_error:
+	mlx5_common_destroy_sq(&priv->qps[id].sq);
 sq_error:
 	mlx5_common_destroy_cq(&priv->qps[id].cq);
 cq_error:
@@ -244,6 +329,7 @@ mlx5_regex_dev_qp_cleanup(struct mlx5_regex_priv *priv)
 	for (i = 0; i < priv->num_qps; i++) {
 		if (priv->qps[i].sq.sq == NULL)
 			continue;
+		destroy_qp_resources(&priv->qps[i], priv->qps[i].sq.num_entries);
 		mlx5_common_destroy_sq(&priv->qps[i].sq);
 		mlx5_common_destroy_cq(&priv->qps[i].cq);
 		mlx5dv_devx_free_uar(priv->qps[i].uar);
