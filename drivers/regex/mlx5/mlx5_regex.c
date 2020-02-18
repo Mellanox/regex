@@ -244,8 +244,10 @@ mlx5_regex_register_write(struct ibv_context *ctx, int engine_id,
  *   0 on success, error otherwise
  */
 int
-mlx5_regex_register_read(struct ibv_context *ctx, int engine_id,
-			 uint32_t addr, uint32_t *data)
+mlx5_regex_register_read(struct ibv_context *ctx __rte_unused,
+			 int engine_id __rte_unused,
+			 uint32_t addr __rte_unused,
+			 uint32_t *data __rte_unused)
 {
 #ifdef REGEX_MLX5_NO_REAL_HW
 	return 0;
@@ -268,8 +270,8 @@ mlx5_regex_register_read(struct ibv_context *ctx, int engine_id,
 	return 0;
 }
 
-static int mlx5_regex_query_cap(struct ibv_context *ctx,
-				struct regex_caps *caps)
+static int mlx5_regex_query_cap(struct ibv_context *ctx __rte_unused,
+				struct regex_caps *caps __rte_unused)
 {
 #ifndef REGEX_MLX5_NO_REAL_HW 
 	uint32_t out[DEVX_ST_SZ_DW(query_hca_cap_out)] = {};
