@@ -4,13 +4,38 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include <rte_malloc.h>
 #include <rte_random.h>
 #include <rte_eal.h>
 #include <rte_regexdev.h>
 
-static int setup_dev_one(int dev_id)
+static volatile int force_quit;
+
+static void
+main_loop(void)
+{
+	struct rte_regex_ops *ops[1];
+	struct rte_regex_iov *iov[1];
+	//int i;
+
+	printf("oooOri size = %ld\n",sizeof(*ops[0]));
+	iov[0] = rte_malloc(NULL, sizeof(*iov[0]), 0);
+	ops[0] = rte_malloc(NULL, sizeof(*ops[0]) +
+			    sizeof(struct rte_regex_match) * 255, 0);
+	ops[0]->num_of_bufs = 1;
+	ops[0]->bufs = &iov;
+	while (!force_quit) {
+		rte_regex_enqueue_burst(0, 0, ops, 1);
+		rte_regex_dequeue_burst(0, 0, ops, 1);
+	}
+
+	/* closing and releasing resources */
+}
+
+static int
+setup_dev_one(int dev_id)
 {
 	struct rte_regex_dev_config dev_cfg;
 	struct rte_regex_dev_info dev_info;
@@ -29,7 +54,18 @@ static int setup_dev_one(int dev_id)
 	return ret;
 }
 
-int main(int argc, char **argv)
+static void
+signal_handler(int signum)
+{
+	if (signum == SIGINT || signum == SIGTERM) {
+		printf("\n\nSignal %d received, preparing to exit...\n",
+				signum);
+		force_quit = 1;
+	}
+}
+
+int
+main(int argc, char **argv)
 {
 	uint8_t dev_count;
 	int ret;
@@ -40,6 +76,10 @@ int main(int argc, char **argv)
 	if (ret < 0)
 		rte_exit(EXIT_FAILURE, "Invalid EAL arguments!\n");
 
+	force_quit = 0;
+	signal(SIGINT, signal_handler);
+	signal(SIGTERM, signal_handler);
+
 	dev_count = rte_regex_dev_count();
 	printf("regex devices = %d\n", dev_count);
 
@@ -48,6 +88,6 @@ int main(int argc, char **argv)
 		if (ret)
 			break;
 	}
-
+	main_loop();
 	return ret;
 }
