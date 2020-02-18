@@ -17,6 +17,8 @@ extern "C" {
 /* The structure definitions live in the kernel headers */
 #include "rxp.h"
 
+#include <infiniband/mlx5dv.h>
+
 /**
  * \mainpage
  *
@@ -367,7 +369,7 @@ struct rxp_response *rxp_next_response(struct rxp_response_batch *ctx);
  * @param  rxp    RXP instance to use. Usually 0, unless there are multiple RXPs present in the system.
  * @return Handle to the RXP; -1 if an error occurs. errno is set as above.
  */
-int rxp_open(unsigned rxp);
+int rxp_open(unsigned rxp, struct ibv_context *ctx);
 
 /**
  * Close the connection to the RXP
@@ -406,7 +408,7 @@ int rxp_queue_status(int rxp_handle, bool *rx_ready, bool *tx_ready);
  * @param rulesfile   ROF file to program into the RXP
  * @param incremental Indicate whether this is an incremental update, and thus that the RXP should not be reset.
  */
-int rxp_program_rules(unsigned rxp, const char *rulesfile, bool incremental);
+int rxp_program_rules(unsigned rxp, const char *rulesfile, bool incremental, struct ibv_context *ctx);
 
 /**
  * Program the provided ROF structure into the RXP

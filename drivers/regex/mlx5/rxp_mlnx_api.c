@@ -455,7 +455,7 @@ struct rxp_response* rxp_next_response(struct rxp_response_batch *ctx)
  * initialisation call, and both will be closed by last thread/app.
  */
 __attribute__ ((visibility ("default")))
-int rxp_open(unsigned rxp __rte_unused)
+int rxp_open(unsigned rxp __rte_unused, struct ibv_context *ctx)
 {
     int ret;
     int rxp_handle = -1;
@@ -465,7 +465,7 @@ int rxp_open(unsigned rxp __rte_unused)
     {
         /* Only do mlnx_init once! */
         rxp_init_status = true;
-        ret = mlnx_init();
+        ret = mlnx_init(ctx);
         if (ret < 0)
         {
             mlnx_log("rxp_open: Failed to setup RXP/s - mlnx_init!");
@@ -630,7 +630,8 @@ static int parse_rof(const char *filename, struct rxp_ctl_rules_pgm **rules)
  * multiple applications attempting to program RXP's!
  */
 __attribute__ ((visibility ("default")))
-int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile, bool incremental)
+int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile,
+		      bool incremental, struct ibv_context *ctx)
 {
     int ret, i;
     struct rxp_ctl_rules_pgm *rules = NULL;
@@ -640,7 +641,7 @@ int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile, bool inc
     {
         /* Only do mlnx_init once! */
         rxp_init_status = true;
-        ret = mlnx_init();
+        ret = mlnx_init(ctx);
 
         if (ret < 0)
         {

@@ -1399,13 +1399,12 @@ int mlnx_update_database(uint8_t rxp_eng)
  *  - TODO:Inform Mellanox of correct Database to use.
  *
  */
-int mlnx_init(void)
+int mlnx_init(struct ibv_context *ctx)
 {
+#ifndef REGEX_MLX5_NO_REAL_HW
     int err;
     uint32_t fpga_ident = 0;
-    int supported;
-    int devn = 0;
-    struct mlx5dv_context_attr attr = {0};
+#endif
 
     if (pthread_mutex_init(&(rxp.lock), NULL) != 0)
     {
@@ -1413,49 +1412,11 @@ int mlnx_init(void)
         return -1;
     }
 
-    rxp.dev_list = ibv_get_device_list(&rxp.num_devices);
-
-    if (rxp.num_devices == 0)
-    {
-        mlnx_log("Platform Info: No devices found!\n");
-        goto tidyup;
-    }
-
-    for (int i = 0; i < rxp.num_devices; i++)
-    {
-        mlnx_log("Platform Info: Device Name           : %s",
-                 ibv_get_device_name(rxp.dev_list[i]));
-        mlnx_log("Platform Info: Device GUID           : %d",
-                 ibv_get_device_guid(rxp.dev_list[i]));
-        mlnx_log("Platform Info: Device Type           : %d",
-                 rxp.dev_list[i]->node_type);
-        mlnx_log("Platform Info: Device Transport Type : %d",
-                 rxp.dev_list[i]->transport_type);
-    }
-
-    attr.flags = MLX5DV_CONTEXT_FLAGS_DEVX;
-
-    if (!mlx5dv_is_supported(rxp.dev_list[devn]))
-    {
-        mlnx_log("Platform Info: Devx not supported!");
-        goto tidyup;
-    }
-
-    rxp.device_ctx = mlx5dv_open_device(rxp.dev_list[devn], &attr);
+    rxp.device_ctx = ctx;
     if (!rxp.device_ctx)
     {
         mlnx_log("Platform Info: Failed to open device %s", strerror(errno));
         goto tidyup;
-    }
-
-    //TODO Check if mlx5dv_open_device needs a corresponding close_device call if fail below???
-
-    supported = mlx5_regex_is_supported(rxp.device_ctx);
-
-    if (!supported)
-    {
-        mlnx_log("Regexp not supported");
-        goto tidyup_context;
     }
 
     /*
@@ -1523,6 +1484,7 @@ int mlnx_init(void)
      * ***   Then calling mlnx_set_database()
      * ************************************************************************
      */
+#ifndef REGEX_MLX5_NO_REAL_HW
     err = mlx5_regex_register_read(rxp.device_ctx, 0 /*engine_id*/,
                                    RXP_CSR_IDENTIFIER, &fpga_ident);
 
@@ -1550,11 +1512,13 @@ int mlnx_init(void)
 
     mlnx_log("Info: FPGA Identifier for RXP Engine 1 - addr:0x%x:0x%x",
              RXP_CSR_IDENTIFIER, fpga_ident);
-
+#endif
     return 1;
 
+#ifndef REGEX_MLX5_NO_REAL_HW
 tidyup_mmap1:
     munmap(rxp.rxp_db_desc[1].database_ptr, MAX_DB_SIZE);
+#endif
 tidyup_umem1:
     mlx5dv_devx_umem_dereg(rxp.rxp_db_desc[1].db_umem);
 tidyup_mmap0:
@@ -1566,7 +1530,6 @@ tidyup_context:
     //free(rxp.device_ctx); //TODO check if this is right 
     //TODO Need to free device_ctx! Get updates from Yuval...
 tidyup:
-    ibv_free_device_list(rxp.dev_list);
     pthread_mutex_destroy(&(rxp.lock));
     //free(rxp);
 

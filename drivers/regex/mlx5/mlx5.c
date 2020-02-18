@@ -112,17 +112,20 @@ static int mlx5_regex_setup_dev(struct mlx5_regex_priv *priv, int num_engines)
 	mlx5dv_init_obj(&dv_obj, MLX5DV_OBJ_PD);
 	priv->pdn = mlx5_pd.pdn;
 
+	/* The uar is set inside the rxp code. */
+/*
 	priv->uar = mlx5dv_devx_alloc_uar(priv->ctx, 0);
 	if (!priv->uar) {
 		ibv_dealloc_pd(priv->pd);
 		return ENOMEM;
 	}
+*/
 	return 0;
 }
 
 static void mlx5_regex_cleanup_dev(struct mlx5_regex_priv *priv)
 {
-	mlx5dv_devx_free_uar(priv->uar);
+	//mlx5dv_devx_free_uar(priv->uar);
 	ibv_dealloc_pd(priv->pd);
 }
 
@@ -200,7 +203,7 @@ static void mlx5_regex_cleanup_db(struct mlx5_regex_priv *priv)
 static int mlx5_regex_dev_info_get(struct rte_regex_dev *dev __rte_unused,
 				   struct rte_regex_dev_info *info)
 {
-	info->max_queue_pairs = MLX5_REGEX_MAX_QUEUES;
+	info->max_queue_pairs = 1;
 	info->max_scatter_gather = 1;
 	info->max_matches = 256;
 	return 0;
@@ -229,15 +232,15 @@ mlx5_regex_dev_configure(struct rte_regex_dev *dev __rte_unused,
 	int i;
 
 	/* open queues. */
-	if (cfg->nb_queue_pairs >= MLX5_REGEX_MAX_QUEUES) {
+	if (cfg->nb_queue_pairs > MLX5_REGEX_MAX_QUEUES) {
 		DRV_LOG(ERR, "To many queue pairs requested %d, max is %d",
 			cfg->nb_queue_pairs, MLX5_REGEX_MAX_QUEUES);
 		rte_errno = ENOMEM;
 		return -rte_errno;
 	}
-	priv->nb_queues = cfg->nb_max_matches;
+	priv->nb_queues = cfg->nb_queue_pairs;
 	for (i = 0; i < priv->nb_queues; i++) {
-		priv->queues[i].handle = rxp_open(0);
+		priv->queues[i].handle = rxp_open(0, priv->ctx);
 		if (priv->queues[i].handle < 0) {
 			DRV_LOG(ERR, "can't open a queue");
 			rte_errno = ENOMEM;
@@ -323,7 +326,7 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 			return -rte_errno;
 		}
 #else
-		attr.regexp_num_of_engines = 2;
+		attr.regexp_num_of_engines = 0;
 #endif
 	}
 	priv = rte_zmalloc("mlx5 regex device private", sizeof(*priv),
@@ -338,7 +341,8 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	priv->pci_dev = pci_dev;
 	sprintf(&priv->regex_dev.dev_name[0], "poc");
 	priv->regex_dev.dev_ops = &dev_ops;
-
+	priv->regex_dev.enqueue = mlx5_regex_dev_enqueue;
+	priv->regex_dev.dequeue = mlx5_regex_dev_dequeue;
 	ret = mlx5_regex_setup_dev(priv, attr.regexp_num_of_engines);
 	if (ret) {
 		rte_errno = ret;

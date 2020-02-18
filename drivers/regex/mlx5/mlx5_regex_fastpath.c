@@ -104,7 +104,7 @@ mlx5_regex_dev_dequeue(struct rte_regex_dev *dev, uint16_t qp_id,
 		if ((queue->pi - queue->ci) == 0)
 			return rec;
 		op = ops[i];
-		if (cnt < 0) {
+		if (cnt <= 0) {
 			rxp_queue_status(queue->handle, &rx_ready, &tx_ready);
 			if (!rx_ready)
 				goto exit;

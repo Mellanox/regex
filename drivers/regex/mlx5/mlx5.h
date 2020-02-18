@@ -38,7 +38,7 @@ struct mlx5_regex_priv {
 	uint32_t eqn;
 	uint16_t nb_queues;
 	struct mlx5_regex_queues queues[MLX5_REGEX_MAX_QUEUES];
-	struct mlx5dv_devx_uar *uar;
+	//struct mlx5dv_devx_uar *uar; /* used inside RXP code. */
 	struct mlx5_regex_db *db_desc;
 	int num_db_desc;
 	TAILQ_ENTRY(mlx5_regex_priv) next;

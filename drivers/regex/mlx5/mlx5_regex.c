@@ -496,10 +496,13 @@ static int mlx5_regex_wqs_open(struct mlx5_regex_ctx *ctx,
 	}
 
 	ctx->uar = mlx5_glue->devx_alloc_uar(ctx->ibv_ctx, 0);
+	//oooOri there is a bug with the base_addr = 0
+#ifndef REGEX_MLX5_NO_REAL_HW
 	if (!ctx->uar || !ctx->uar->base_addr) {
 		DRV_LOG(ERR, "uar creation failed %s\n", strerror(errno));
 		return -1;
 	}
+#endif
 	ret = mlx5_glue->devx_query_eqn(ctx->ibv_ctx, 0, &ctx->eqn);
 	if (ret || !ctx->eqn) {
 		DRV_LOG(ERR, "eq creation failed  %s\n", strerror(errno));

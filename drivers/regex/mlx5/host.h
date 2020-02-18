@@ -93,7 +93,7 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
                         uint16_t job_count);
 int mlnx_poll(struct rxp_queue *rxp_queue, bool *rx_ready, bool *tx_ready);
 int mlnx_open(struct rxp_queue *queue);
-int mlnx_init(void);
+int mlnx_init(struct ibv_context *ctx);
 int mlnx_close(struct rxp_mlnx_dev *rxp);
 int mlnx_release(struct rxp_queue *queue);
 
