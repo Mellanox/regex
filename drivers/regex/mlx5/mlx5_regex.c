@@ -575,7 +575,7 @@ void mlx5dv_set_metadata_seg(struct mlx5_wqe_metadata_seg *seg,
 int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 			 struct mlx5_regex_wqe_ctrl_seg *regex_ctrl_seg,
 			 struct mlx5_wqe_data_seg *metadata,
-			 struct mlx5_wqe_data_seg *input,
+			 struct mlx5_wqe_data_seg *input __rte_unused,
 			 struct mlx5_wqe_data_seg *output,
 			 unsigned int qid)
 {
@@ -622,12 +622,12 @@ int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 	unsigned int i, match;
 	
 	(void) regex_ctrl_seg;
-	uint8_t *metadata_p = (uint8_t *)metadata->addr;
-	uint8_t *output_p = (uint8_t *)output->addr;
+	uint8_t *metadata_p = (uint8_t *)(rte_be_to_cpu_64((uintptr_t)(metadata->addr)))+32;
+	uint8_t *output_p = (uint8_t *)(rte_be_to_cpu_64((uintptr_t)(output->addr)));
 
-	match =  rand()%(input->byte_count/8);
+	match = 5;
 	mlx5_regex_set_metadata(metadata_p, 0, 0, 0, 0, match, match +1, 0, 0);
-	for(i = 0; i < match && i < output->byte_count/4; i++) {
+	for(i = 0; i < match && i < rte_be_to_cpu_32(output->byte_count)/4; i++) {
 		output_p[i] = rand();
 	}
 
@@ -693,7 +693,7 @@ int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sqid)
 		       mlx5dv_get_cqe_opcode(cqe), be32toh(cqe->byte_cnt));
 		return -1;
 	}
-	return cqe->wqe_id;
+	return  1; //cqe->wqe_id;
 }
 
 struct mlx5_regex_buff {

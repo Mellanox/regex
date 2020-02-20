@@ -1056,6 +1056,8 @@ int mlnx_poll(struct rxp_queue *rxp_queue, bool *rx_ready, bool *tx_ready)
             /* 1 = response waiting, 0 = no completion, -1 = error */
             if (ret > 0)
             {
+
+		//rxp_queue->sq_buf[i].work_id == work_id
                 /* Must be a response in response queue */
                 *rx_ready = true;
                 rxp_queue->sq_buf[i].sq_resp_ready = true;
