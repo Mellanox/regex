@@ -7,7 +7,7 @@
 #define _HOST_H_
 
 #include "mlx5_regex.h"
-#include "rxp.h"
+#include <rxp.h>
 
 #define MLNX_LOGGING_ENABLED            1       //Switch off printf's.
 
@@ -15,6 +15,8 @@
 #define RXP_INITIALIZATION_TIMEOUT      60000   //Initialization timeout in ms
 #define RXP_NUM_QUEUES                  1u      //#App queue/cores, not RXP Engs
 #define MAX_RXP_ENGINES                 2u
+#define RXP_SHADOW_EM_COUNT             1u      //Extra External Memories to use
+#define RXP_MAX_NOT_USED                0xFF
 
 /*
  * The number of jobs that can be batched in any transmission. 1 job per SQ as
@@ -31,6 +33,9 @@ struct rxp_mlnx_job_desc {
 
 struct rxp_database {
     void                    *database_ptr;
+    uint32_t                database_byte_cnt;
+    bool                    db_active;
+    uint8_t                 db_assigned_to_eng_num;
     struct mlx5dv_devx_umem *db_umem;
     struct mlx5_database_ctx db_ctx;
 };
@@ -40,7 +45,7 @@ struct rxp_mlnx_dev {
     struct                  ibv_device **dev_list;
     int                     num_devices;
     struct ibv_context      *device_ctx;
-    struct rxp_database     rxp_db_desc[MAX_RXP_ENGINES];
+    struct rxp_database     rxp_db_desc[MAX_RXP_ENGINES+RXP_SHADOW_EM_COUNT];
 
     /* Keep account of the number of queues opened */
     uint8_t                 open_queues;  // Number of queues opened
@@ -78,14 +83,16 @@ struct rxp_queue {
 
 /* Prototypes: */
 int mlnx_resume_rxp(uint8_t rxp_eng);
-int mlnx_update_database(uint8_t rxp_eng);
-int mlnx_set_database(uint8_t rxp_eng);
+int mlnx_update_database(uint16_t prog_command, uint8_t rxp_eng);
+int mlnx_set_database(uint8_t rxp_eng, uint8_t db_to_use);
 int mlnx_csr_read(uint32_t csr_addr_offset, uint32_t *returnVal,
                     uint8_t rxp_eng);
 uint32_t mlnx_csr_write(uint32_t *value, uint32_t csr_addr_offset,
                     uint8_t rxp_eng);
 int mlnx_write_rules(struct rxp_ctl_rules_pgm *rules, uint32_t rules_len,
                     uint8_t rxp_eng);
+int mlnx_write_shared_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count,
+                     uint8_t rxp_eng, uint8_t db_to_use);
 int mlnx_read_resp(struct rxp_queue *rxp_queue, uint8_t *buf, size_t buf_size,
                     uint32_t *num_returned_resp);
 size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
@@ -96,6 +103,8 @@ int mlnx_open(struct rxp_queue *queue);
 int mlnx_init(struct ibv_context *ctx);
 int mlnx_close(struct rxp_mlnx_dev *rxp);
 int mlnx_release(struct rxp_queue *queue);
+void mlnx_prog_mode_set(enum rxp_program_mode mode);
+enum rxp_program_mode  mlnx_prog_mode_get(void);
 
 #if MLNX_LOGGING_ENABLED
 void mlnx_log(const char *fmt, ...);

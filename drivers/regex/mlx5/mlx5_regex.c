@@ -28,9 +28,9 @@ struct mlx5_regex_cq {
 };
 
 struct mlx5_regex_sq {
-	int sqn;
+	int qpn;
 	struct mlx5dv_devx_obj *devx_obj;
-	uint32_t *sq_dbr;
+	uint32_t *qp_dbr;
 	struct mlx5_regex_cq cq;
 	void* wq_buff;
 	unsigned int pi;
@@ -39,91 +39,14 @@ struct mlx5_regex_sq {
 struct mlx5_regex_ctx {
 	struct ibv_context *ibv_ctx;
 	struct regex_caps caps;
-	struct mlx5_regex_sq *sqs;
-	unsigned int num_sqs;
-	unsigned int pdn;
-	unsigned int eqn;
+	struct mlx5_regex_sq *qps;
+	unsigned int num_qps;
+	int pd;
+	uint32_t eq;
 	void *eq_buff;
 	struct mlx5dv_devx_uar *uar;
-	struct mlx5dv_devx_obj *pd;
 };
-
-static int
-regex_database_set(struct ibv_context *ctx, int engine_id,
-		   const struct mlx5_database_ctx *db_ctx, int stop, int go)
-{
-#ifdef REGEX_MLX5_NO_REAL_HW
-	return 0;
-#endif
-	uint32_t out[DEVX_ST_SZ_DW(set_regexp_params_out)] = {};
-	uint32_t in[DEVX_ST_SZ_DW(set_regexp_params_in)] = {};
-	int err;
-
-	DEVX_SET(set_regexp_params_in, in, opcode, MLX5_CMD_SET_REGEX_PARAMS);
-	DEVX_SET(set_regexp_params_in, in, engine_id, engine_id);
-	if (stop || go) {
-		/* stop == 0 AND field select == 1 means GO */
-		DEVX_SET(set_regexp_params_in, in, regexp_params.stop_engine,
-			 stop);
-		DEVX_SET(set_regexp_params_in, in, field_select.stop_engine, 1);
-	}
-
-	if (db_ctx) {
-		DEVX_SET(set_regexp_params_in, in,
-			 regexp_params.db_umem_id, db_ctx->umem_id);
-		DEVX_SET64(set_regexp_params_in, in,
-			   regexp_params.db_umem_offset, db_ctx->offset);
-		DEVX_SET(set_regexp_params_in, in, field_select.db_umem_id, 1);
-	}
-	err = mlx5dv_devx_general_cmd(ctx, in, sizeof(in), out, sizeof(out));
-	if (err) {
-		DRV_LOG(ERR, "Set regexp params failed %d", err);
-		return err;
-	}
-	return 0;
-}
-
-/**
- * Set the rules database umem
- *
- * Will set the database umem from which HW will read the rules.
- * Should be called only after engine stop.
- *
- * @param ctx
- *   ibv device handle.
- * @param engine_id
- *   The engine id to which the umem will be set.
- * @param db_ctx
- *   The struct which contains the umem, and offset inside the umem.
- *
- * @return
- *   0 on success, error otherwise
- */
-int
-mlx5_regex_database_set(struct ibv_context *ctx, int engine_id,
-			const struct mlx5_database_ctx *db_ctx)
-{
-	return regex_database_set(ctx, engine_id, db_ctx, 0, 0);
-}
-
-/**
- * Stops the engine.
- *
- * Function will return when engine is idle.
- *
- * @param ctx
- *   ibv device handle.
- * @param engine_id
- *   The engine id to stop.
- *
- * @return
- *   0 on success, error otherwise
- */
-int
-mlx5_regex_engine_stop(struct ibv_context *ctx, int engine_id)
-{
-	return regex_database_set(ctx, engine_id, NULL, 1, 0);
-}
+struct mlx5_database_ctx;
 
 /**
  * Starts the engine.
@@ -138,142 +61,14 @@ mlx5_regex_engine_stop(struct ibv_context *ctx, int engine_id)
  * @return
  *   0 on success, error otherwise
  */
-int
-mlx5_regex_engine_go(struct ibv_context *ctx, int engine_id)
-{
-	return regex_database_set(ctx, engine_id, NULL, 0, 1);
-}
-
-/**
- * Query the engine parameters.
- *
- * Engine will start processing jobs.
- *
- * @param ctx
- *   ibv device handle.
- * @param engine_id
- *   The engine id to start.
- * @param db_ctx
- *   Output containing the umem id, and offset inside the umem.
- *
- * @return
- *   0 on success, error otherwise
- */
-int
-mlx5_regex_database_query(struct ibv_context *ctx, int engine_id,
-			  struct mlx5_database_ctx *db_ctx)
-{
-#ifdef REGEX_MLX5_NO_REAL_HW
-	return 0;
-#endif
-	uint32_t out[DEVX_ST_SZ_DW(query_regexp_params_out)] = {};
-	uint32_t in[DEVX_ST_SZ_DW(query_regexp_params_in)] = {};
-	int err;
-
-	DEVX_SET(query_regexp_params_in, in, opcode,
-		 MLX5_CMD_QUERY_REGEX_PARAMS);
-	DEVX_SET(query_regexp_params_in, in, engine_id, engine_id);
-
-	err = mlx5dv_devx_general_cmd(ctx, in, sizeof(in), out, sizeof(out));
-	if (err) {
-		DRV_LOG(ERR, "Query regexp params failed %d", err);
-		return err;
-	}
-	db_ctx->umem_id = DEVX_GET(query_regexp_params_out, out,
-				   regexp_params.db_umem_id);
-	db_ctx->offset = DEVX_GET(query_regexp_params_out, out,
-				  regexp_params.db_umem_offset);
-	return 0;
-}
 
 
-/**
- * Write to RXP registers.
- *
- * @param ctx
- *   ibv device handle
- * @param engine_id
- *   Chooses on which engine the register will be written..
- * @param addr
- *   Register address.
- * @param data
- *   Data to be written to the register.
- *
- * @return
- *   0 on success, error otherwise
- */
-int
-mlx5_regex_register_write(struct ibv_context *ctx, int engine_id,
-			  uint32_t addr, uint32_t data)
-{
-#ifdef REGEX_MLX5_NO_REAL_HW
-	return 0;
-#endif
-	uint32_t out[DEVX_ST_SZ_DW(set_regexp_register_out)] = {};
-	uint32_t in[DEVX_ST_SZ_DW(set_regexp_register_in)] = {};
-	int err;
-
-	DEVX_SET(set_regexp_register_in, in, opcode,
-		 MLX5_CMD_SET_REGEX_REGISTERS);
-	DEVX_SET(set_regexp_register_in, in, engine_id, engine_id);
-	DEVX_SET(set_regexp_register_in, in, register_address, addr);
-	DEVX_SET(set_regexp_register_in, in, register_data, data);
-
-	err = mlx5dv_devx_general_cmd(ctx, in, sizeof(in), out, sizeof(out));
-	if (err) {
-		DRV_LOG(ERR, "Set regexp register failed %d", err);
-		return err;
-	}
-	return 0;
-}
 
 
-/**
- * Read from RXP registers
- *
- * @param ctx
- *   ibv device handle
- * @param engine_id
- *   Chooses from which engine to read.
- * @param addr
- *   Register address.
- * @param data
- *   Output containing the pointer to the data..
- *
- * @return
- *   0 on success, error otherwise
- */
-int
-mlx5_regex_register_read(struct ibv_context *ctx __rte_unused,
-			 int engine_id __rte_unused,
-			 uint32_t addr __rte_unused,
-			 uint32_t *data __rte_unused)
-{
-#ifdef REGEX_MLX5_NO_REAL_HW
-	return 0;
-#endif
-	uint32_t out[DEVX_ST_SZ_DW(query_regexp_register_out)] = {};
-	uint32_t in[DEVX_ST_SZ_DW(query_regexp_register_in)] = {};
-	int err;
-
-	DEVX_SET(query_regexp_register_in, in, opcode,
-		 MLX5_CMD_QUERY_REGEX_REGISTERS);
-	DEVX_SET(query_regexp_register_in, in, engine_id, engine_id);
-	DEVX_SET(query_regexp_register_in, in, register_address, addr);
-
-	err = mlx5dv_devx_general_cmd(ctx, in, sizeof(in), out, sizeof(out));
-	if (err) {
-		DRV_LOG(ERR, "Query regexp register failed %d", err);
-		return err;
-	}
-	*data = DEVX_GET(query_regexp_register_out, out, register_data);
-	return 0;
-}
 
 static int mlx5_regex_query_cap(struct ibv_context *ctx __rte_unused,
 				struct regex_caps *caps __rte_unused)
 {
-#ifndef REGEX_MLX5_NO_REAL_HW 
 	uint32_t out[DEVX_ST_SZ_DW(query_hca_cap_out)] = {};
 	uint32_t in[DEVX_ST_SZ_DW(query_hca_cap_in)] = {};
 	int err;
@@ -296,17 +91,11 @@ static int mlx5_regex_query_cap(struct ibv_context *ctx __rte_unused,
 					capability.cmd_hca_cap.regexp_num_of_engines);
 	caps->log_crspace_size = DEVX_GET(query_hca_cap_out, out,
 					  capability.cmd_hca_cap.regexp_log_crspace_size);
-#else	
-	caps->supported = 1;
-	caps->num_of_engines = 2;
-	caps->log_crspace_size = 32;
-#endif
 	return 0;
 }
 
 int mlx5_regex_is_supported(struct ibv_context *ibv_ctx)
 {
-
 	struct regex_caps caps;
 	int err;
 
@@ -319,29 +108,30 @@ int mlx5_regex_is_supported(struct ibv_context *ibv_ctx)
 
 #define RQ_TYPE_NO_RQ 3
 
-static int alloc_pd(struct mlx5_regex_ctx *ctx)
+static int alloc_pd(struct ibv_context *ctx)
 {
 	uint32_t in[DEVX_ST_SZ_DW(alloc_pd_in)] = {0};
 	uint32_t out[DEVX_ST_SZ_DW(alloc_pd_out)] = {0};
+	struct mlx5dv_devx_obj *pd;
 
 	DEVX_SET(alloc_pd_in, in, opcode, MLX5_CMD_OP_ALLOC_PD);
-	ctx->pd = mlx5dv_devx_obj_create(ctx->ibv_ctx, in, sizeof(in), out, sizeof(out));
-	if (!ctx->pd) {
-		DRV_LOG(ERR, "pd devx creation failed\n");
+	pd = mlx5dv_devx_obj_create(ctx, in, sizeof(in), out, sizeof(out));
+	if (!pd) {
+		fprintf(stderr, "pd devx creation failed\n");
 		return -1;
 	}
 
-	ctx->pdn = DEVX_GET(alloc_pd_out, out, pd);
-	return 0;
+	return DEVX_GET(alloc_pd_out, out, pd);
 }
 
-static int create_cq(struct ibv_context *ctx, struct mlx5dv_devx_uar *uar,
-		     uint32_t eq, struct mlx5_regex_cq *cq)
+static int create_cq(struct ibv_context *ctx, void **buff_out,
+		     struct mlx5dv_devx_uar *uar, uint32_t **dbr_out,
+		     uint32_t eq)
 {
 	uint32_t in[DEVX_ST_SZ_DW(create_cq_in)] = {0};
 	uint32_t out[DEVX_ST_SZ_DW(create_cq_out)] = {0};
 	struct mlx5_cqe64 *cqe;
-	struct mlx5dv_devx_obj *cq_obj;
+	struct mlx5dv_devx_obj *cq;
 	struct mlx5dv_devx_umem *pas, *dbrm;
 	uint8_t *buff;
 	uint8_t *dbr;
@@ -376,17 +166,18 @@ static int create_cq(struct ibv_context *ctx, struct mlx5dv_devx_uar *uar,
 	DEVX_SET(create_cq_in, in, cq_context.dbr_umem_id, dbrm->umem_id);
 	DEVX_SET64(create_cq_in, in, cq_context.dbr_addr, 0x940);
 
-	cq_obj = mlx5dv_devx_obj_create(ctx, in, sizeof(in), out, sizeof(out));
-	if (!cq_obj) {
-		DRV_LOG(ERR, "cq devx creation failed\n");
-		return -1;
+	cq = mlx5dv_devx_obj_create(ctx, in, sizeof(in), out, sizeof(out));
+	if (!cq) {
+		fprintf(stderr, "cq devx creation failed\n");
+		return 0;
 	}
 
-	cq->cq_dbr = (uint32_t *)(dbr + 0x940);
-	cq->cq_buff = buff;
-	cq->cqn = DEVX_GET(create_cq_out, out, cqn);
+	if (dbr_out)
+		*dbr_out = (uint32_t *)(dbr + 0x940);
+	if (buff_out)
+		*buff_out = buff;
 
-	return 0;
+	return DEVX_GET(create_cq_out, out, cqn);
 }
 
 static int create_sq(struct ibv_context *ctx, void **buff_out,
@@ -451,20 +242,21 @@ static int sq_to_rdy(struct mlx5dv_devx_obj *obj, int sq)
 }
 
 static int mlx5_regex_wq_open(struct mlx5_regex_ctx *ctx,
-			      struct mlx5_regex_sq *sq)
+			      struct mlx5_regex_sq *qp)
 {
-	create_cq(ctx->ibv_ctx, ctx->uar, ctx->eqn, &sq->cq);
-	if (!sq->cq.cqn) {
+	qp->cq.cqn = create_cq(ctx->ibv_ctx, &qp->cq.cq_buff, ctx->uar,
+			       &qp->cq.cq_dbr, ctx->eq);
+	if (!qp->cq.cqn) {
 		DRV_LOG(ERR, "cq creation failed\n");
 		return -1;
 	}
-	sq->sqn = create_sq(ctx->ibv_ctx, &sq->wq_buff, ctx->uar, &sq->sq_dbr,
-			    sq->cq.cqn, ctx->pdn, &sq->devx_obj, 0);
-	if (!sq->sqn || !sq->devx_obj) {
+	qp->qpn = create_sq(ctx->ibv_ctx, &qp->wq_buff, ctx->uar, &qp->qp_dbr,
+			    qp->cq.cqn, ctx->pd, &qp->devx_obj, 0);
+	if (!qp->qpn || !qp->devx_obj) {
 		DRV_LOG(ERR, "sq creation failed %s\n", strerror(errno));
 		return -1;
 	}
-	if (sq_to_rdy(sq->devx_obj, sq->sqn)) {
+	if (sq_to_rdy(qp->devx_obj, qp->qpn)) {
 		DRV_LOG(ERR, "sq modify failed %s\n", strerror(errno));
 		return -1;
 	}
@@ -472,12 +264,12 @@ static int mlx5_regex_wq_open(struct mlx5_regex_ctx *ctx,
 	return 0;
 }
 
-static int mlx5_regex_wq_close(struct mlx5_regex_ctx *ctx,
-			      struct mlx5_regex_sq *sq)
+static int mlx5_regex_wq_close(struct mlx5_regex_ctx *ctx __rte_unused,
+			      struct mlx5_regex_sq *sq __rte_unused)
 {
-	mlx5_glue->devx_obj_destroy(sq->devx_obj);
+	/*mlx5_glue->devx_obj_destroy(sq->devx_obj);
 	mlx5_glue->devx_obj_destroy(sq->cq.devx_obj);
-	mlx5_glue->devx_obj_destroy(ctx->pd);
+	mlx5_glue->devx_obj_destroy(ctx->pd);*/
 	return 0;
 }
 
@@ -486,9 +278,9 @@ static int mlx5_regex_wqs_open(struct mlx5_regex_ctx *ctx,
 {
 	int ret;
 
-	ctx->sqs = calloc(num_wqs, sizeof(struct mlx5_regex_sq));
-	ctx->num_sqs = num_wqs;
-	alloc_pd(ctx);
+	ctx->qps = calloc(num_wqs, sizeof(struct mlx5_regex_sq));
+	ctx->num_qps = num_wqs;
+	ctx->pd = alloc_pd(ctx->ibv_ctx);
 
 	if (!ctx->pd) {
 		DRV_LOG(ERR, "pd creation failed %s\n", strerror(errno));
@@ -496,32 +288,31 @@ static int mlx5_regex_wqs_open(struct mlx5_regex_ctx *ctx,
 	}
 
 	ctx->uar = mlx5_glue->devx_alloc_uar(ctx->ibv_ctx, 0);
-	//oooOri there is a bug with the base_addr = 0
-#ifndef REGEX_MLX5_NO_REAL_HW
+
 	if (!ctx->uar || !ctx->uar->base_addr) {
 		DRV_LOG(ERR, "uar creation failed %s\n", strerror(errno));
 		return -1;
 	}
-#endif
-	ret = mlx5_glue->devx_query_eqn(ctx->ibv_ctx, 0, &ctx->eqn);
-	if (ret || !ctx->eqn) {
+
+	ret = mlx5_glue->devx_query_eqn(ctx->ibv_ctx, 0, &ctx->eq);
+	if (ret || !ctx->eq) {
 		DRV_LOG(ERR, "eq creation failed  %s\n", strerror(errno));
 		return -1;
 	}
 
 
 	for (unsigned int i = 0; i < num_wqs; i++)
-		if (mlx5_regex_wq_open(ctx, &ctx->sqs[i]))
+		if (mlx5_regex_wq_open(ctx, &ctx->qps[i]))
 			return -1;
 	return 0;
 }
 
 static int mlx5_regex_wqs_close(struct mlx5_regex_ctx *ctx)
 {
-	for (unsigned int i = 0; i < ctx->num_sqs; i++)
-		mlx5_regex_wq_close(ctx, &ctx->sqs[i]);
+	for (unsigned int i = 0; i < ctx->num_qps; i++)
+		mlx5_regex_wq_close(ctx, &ctx->qps[i]);
 
-	free(ctx->sqs);
+	free(ctx->qps);
 
 	return 0;
 }
@@ -574,34 +365,33 @@ void mlx5dv_set_metadata_seg(struct mlx5_wqe_metadata_seg *seg,
 // Return work_id, or -1 in case of err
 int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 			 struct mlx5_regex_wqe_ctrl_seg *regex_ctrl_seg,
-			 struct mlx5_wqe_data_seg *metadata,
-			 struct mlx5_wqe_data_seg *input __rte_unused,
+			 uint8_t* metadata_p, uint32_t lkey,
+			 struct mlx5_wqe_data_seg *input,
 			 struct mlx5_wqe_data_seg *output,
 			 unsigned int qid)
 {
-#ifndef REGEX_MLX5_NO_REAL_HW
 	struct mlx5_wqe_metadata_seg *meta_seg;
 	struct mlx5_wqe_ctrl_seg *ctrl_seg;
 	struct mlx5_regex_sq *sq;
 	size_t wqe_offset;
 
-	if (ctx->num_sqs <= qid)
+	if (ctx->num_qps <= qid)
 		return -EEXIST;
 
-	sq = &ctx->sqs[qid];
+	sq = &ctx->qps[qid];
 	int ds = 4; //ctrl + meta + input + output
 
 	wqe_offset = (sq->pi % SQ_SIZE) * MLX5_SEND_WQE_BB;
 	ctrl_seg = (struct mlx5_wqe_ctrl_seg *)((uint8_t*)sq->wq_buff + wqe_offset);
 	mlx5dv_set_ctrl_seg(ctrl_seg, sq->pi, MLX5_OPCODE_MMO,
-			    MLX5_OPC_MOD_MMO_REGEX, sq->sqn,
+			    MLX5_OPC_MOD_MMO_REGEX, sq->qpn,
 			    MLX5_WQE_CTRL_CQ_UPDATE, ds, 0,
 			    regex_ctrl_seg->le_subset_id_0_subset_id_1);
 
 	meta_seg = (struct mlx5_wqe_metadata_seg *)((uint8_t*)ctrl_seg + sizeof(*ctrl_seg));
 	mlx5dv_set_metadata_seg(meta_seg,
 				regex_ctrl_seg->ctrl_subset_id_2_subset_id_3,
-				metadata->lkey, metadata->addr);
+				lkey, (uintptr_t)metadata_p);
 
 	memcpy((uint8_t*)meta_seg + sizeof(*meta_seg), input, sizeof(*input));
 	memcpy((uint8_t*)meta_seg + sizeof(*meta_seg) + sizeof(*input),
@@ -609,33 +399,15 @@ int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 
 	uint64_t *doorbell_addr = (uint64_t *)((uint8_t *)ctx->uar->base_addr + 0x800);
 	asm volatile("" ::: "memory");
-	sq->sq_dbr[MLX5_SND_DBR] = htobe32(sq->pi & 0xffff);
+	sq->qp_dbr[MLX5_SND_DBR] = htobe32(sq->pi & 0xffff);
 	asm volatile("" ::: "memory");
 	*doorbell_addr = *(uint64_t *)ctrl_seg;
 	asm volatile("" ::: "memory");
 
+	print_raw(ctrl_seg, 1);
 	int work_id = sq->pi;
 	sq->pi = (sq->pi+1)%MAX_WQE_INDEX;
 	return work_id;
-#else
-	int work_id;
-	unsigned int i, match;
-	
-	(void) regex_ctrl_seg;
-	uint8_t *metadata_p = (uint8_t *)(rte_be_to_cpu_64((uintptr_t)(metadata->addr)))+32;
-	uint8_t *output_p = (uint8_t *)(rte_be_to_cpu_64((uintptr_t)(output->addr)));
-
-	match = 5;
-	mlx5_regex_set_metadata(metadata_p, 0, 0, 0, 0, match, match +1, 0, 0);
-	for(i = 0; i < match && i < rte_be_to_cpu_32(output->byte_count)/4; i++) {
-		DEVX_SET(regexp_match_tuple, output_p + i * (64/8), rule_id, i + 1);
-		DEVX_SET(regexp_match_tuple, output_p + i * (64/8), start_ptr, i + 2);
-		DEVX_SET(regexp_match_tuple, output_p + i * (64/8), length, (i + 1) * 10);
-	}
-
-	work_id = mlx5_regex_send_nop(ctx, qid);
-	return work_id;
-#endif
 }
 
 // Return work_id, or -1 in case of err
@@ -645,21 +417,21 @@ int mlx5_regex_send_nop(struct mlx5_regex_ctx *ctx, unsigned int qid)
 	struct mlx5_regex_sq *sq;
 	size_t wqe_offset;
 
-	if (ctx->num_sqs <= qid)
+	if (ctx->num_qps <= qid)
 		return -EEXIST;
 
-	sq = &ctx->sqs[qid];
+	sq = &ctx->qps[qid];
 
 	wqe_offset = (sq->pi % SQ_SIZE) * MLX5_SEND_WQE_BB;
 	ctrl_seg = (struct mlx5_wqe_ctrl_seg *)((uint8_t*)sq->wq_buff + wqe_offset);
 	mlx5dv_set_ctrl_seg(ctrl_seg, sq->pi, MLX5_OPCODE_NOP,
-			    0, sq->sqn,
+			    0, sq->qpn,
 			    MLX5_WQE_CTRL_CQ_UPDATE, 1, 0,
 			    0);
 
 	uint64_t *doorbell_addr = (uint64_t *)((uint8_t *)ctx->uar->base_addr + 0x800);
 	asm volatile("" ::: "memory");
-	sq->sq_dbr[MLX5_SND_DBR] = htobe32(sq->pi & 0xffff);
+	sq->qp_dbr[MLX5_SND_DBR] = htobe32(sq->pi & 0xffff);
 	asm volatile("" ::: "memory");
 	*doorbell_addr = *(uint64_t *)ctrl_seg;
 	asm volatile("" ::: "memory");
@@ -671,12 +443,12 @@ int mlx5_regex_send_nop(struct mlx5_regex_ctx *ctx, unsigned int qid)
 
 int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sqid)
 {
-	struct mlx5_regex_sq *sq = &ctx->sqs[sqid];
+	struct mlx5_regex_sq *sq = &ctx->qps[sqid];
 	struct mlx5_cqe64 *cqe;
 	size_t next_cqe_offset;
 
 	next_cqe_offset =  sq->cq.ci % SQ_SIZE * sizeof(*cqe);
-	cqe = (struct mlx5_cqe64 *)((uint8_t *)sq->cq.cq_buff + next_cqe_offset);
+	cqe = (struct mlx5_cqe64 *)((uint8_t*)sq->cq.cq_buff + next_cqe_offset);
 	int retry = 1600000;
 
 	while (--retry && (mlx5dv_get_cqe_opcode(cqe) == MLX5_CQE_INVALID ||
@@ -695,7 +467,111 @@ int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sqid)
 		       mlx5dv_get_cqe_opcode(cqe), be32toh(cqe->byte_cnt));
 		return -1;
 	}
-	return  1; //cqe->wqe_id;
+	printf("Poll cqe:\n");
+	print_raw(cqe, 1);	
+	return 1;
+}
+
+static int _mlx5_regex_database_set(struct ibv_context *ctx, int engine_id,
+			    struct mlx5_database_ctx *db_ctx, int stop,
+			    int resume)
+{
+	uint32_t out[DEVX_ST_SZ_DW(set_regexp_params_out)] = {};
+	uint32_t in[DEVX_ST_SZ_DW(set_regexp_params_in)] = {};
+	int err;
+
+	DEVX_SET(set_regexp_params_in, in, opcode, MLX5_CMD_SET_REGEX_PARAMS);
+	DEVX_SET(set_regexp_params_in, in, engine_id, engine_id);
+	if (stop || resume) {
+		DEVX_SET(set_regexp_params_in, in, regexp_params.stop_engine, stop);
+		DEVX_SET(set_regexp_params_in, in, field_select.stop_engine, 1);
+	}
+
+	if (db_ctx) {
+		DEVX_SET(set_regexp_params_in, in, regexp_params.db_umem_id, db_ctx->umem_id);
+		DEVX_SET64(set_regexp_params_in, in, regexp_params.db_umem_offset, db_ctx->offset);
+		DEVX_SET(set_regexp_params_in, in, field_select.db_umem_id, 1);
+	}
+	err = mlx5dv_devx_general_cmd(ctx, in, sizeof(in), out, sizeof(out));
+	if (err) {
+		fprintf(stderr, "Set regexp params failed %d syndrome= 0x%d\n", err, DEVX_GET(set_regexp_params_out, out, syndrome));
+		return err;
+	}
+	return 0;
+}
+
+int mlx5_regex_database_set(struct ibv_context *ctx, int engine_id,
+			    struct mlx5_database_ctx *db_ctx)
+{
+	return _mlx5_regex_database_set(ctx, engine_id, db_ctx, 0, 0);
+}
+
+int mlx5_regex_engine_stop(struct ibv_context *ctx, int engine_id)
+{
+	return _mlx5_regex_database_set(ctx, engine_id, NULL, 1, 0);
+}
+
+int mlx5_regex_engine_resume(struct ibv_context *ctx, int engine_id)
+{
+	return _mlx5_regex_database_set(ctx, engine_id, NULL, 0, 1);
+}
+
+int mlx5_regex_database_query(struct ibv_context *ctx, int engine_id,
+			    struct mlx5_database_ctx *db_ctx)
+{
+	uint32_t out[DEVX_ST_SZ_DW(query_regexp_params_out)] = {};
+	uint32_t in[DEVX_ST_SZ_DW(query_regexp_params_in)] = {};
+	int err;
+
+	DEVX_SET(query_regexp_params_in, in, opcode, MLX5_CMD_QUERY_REGEX_PARAMS);
+	DEVX_SET(query_regexp_params_in, in, engine_id, engine_id);
+
+	err = mlx5dv_devx_general_cmd(ctx, in, sizeof(in), out, sizeof(out));
+	if (err) {
+		fprintf(stderr, "Query regexp params failed %d\n", err);
+		return err;
+	}
+	db_ctx->umem_id = DEVX_GET(query_regexp_params_out, out, regexp_params.db_umem_id);
+	db_ctx->offset = DEVX_GET(query_regexp_params_out, out, regexp_params.db_umem_offset);
+	return 0;
+}
+
+int mlx5_regex_register_write(struct ibv_context *ctx, int engine_id,
+			      uint32_t addr, uint32_t data) {
+	uint32_t out[DEVX_ST_SZ_DW(set_regexp_register_out)] = {};
+	uint32_t in[DEVX_ST_SZ_DW(set_regexp_register_in)] = {};
+	int err;
+
+	DEVX_SET(set_regexp_register_in, in, opcode, MLX5_CMD_SET_REGEX_REGISTERS);
+	DEVX_SET(set_regexp_register_in, in, engine_id, engine_id);
+	DEVX_SET(set_regexp_register_in, in, register_address, addr);
+	DEVX_SET(set_regexp_register_in, in, register_data, data);
+
+	err = mlx5dv_devx_general_cmd(ctx, in, sizeof(in), out, sizeof(out));
+	if (err) {
+		fprintf(stderr, "Set regexp register failed %d\n", err);
+		return err;
+	}
+	return 0;
+}
+
+int mlx5_regex_register_read(struct ibv_context *ctx, int engine_id,
+			     uint32_t addr, uint32_t *data) {
+	uint32_t out[DEVX_ST_SZ_DW(query_regexp_register_out)] = {};
+	uint32_t in[DEVX_ST_SZ_DW(query_regexp_register_in)] = {};
+	int err;
+
+	DEVX_SET(query_regexp_register_in, in, opcode, MLX5_CMD_QUERY_REGEX_REGISTERS);
+	DEVX_SET(query_regexp_register_in, in, engine_id, engine_id);
+	DEVX_SET(query_regexp_register_in, in, register_address, addr);
+
+	err = mlx5dv_devx_general_cmd(ctx, in, sizeof(in), out, sizeof(out));
+	if (err) {
+		fprintf(stderr, "Query regexp register failed %d\n", err);
+		return err;
+	}
+	*data = DEVX_GET(query_regexp_register_out, out, register_data);
+	return 0;
 }
 
 struct mlx5_regex_buff {
@@ -714,7 +590,7 @@ struct mlx5_regex_buff *mlx5_regex_reg_buffer(struct mlx5_regex_ctx *ctx, void* 
 	uint32_t out[DEVX_ST_SZ_DW(create_mkey_out)] = {0};
 	struct mlx5dv_devx_umem *mem;
 	struct mlx5dv_devx_obj *mr;
-	int pd = ctx->pdn;
+	int pd = ctx->pd;
 
 	mem = mlx5dv_devx_umem_reg(ctx->ibv_ctx, buff, size, 7);
 	if (!mem)
@@ -748,4 +624,28 @@ struct mlx5_regex_buff *mlx5_regex_reg_buffer(struct mlx5_regex_ctx *ctx, void* 
 	regex_buff->lkey = DEVX_GET(create_mkey_out, out, mkey_index) << 8 | 0x42;
 	return regex_buff;
 }
+void print_raw(void *ptr, size_t size)
+{
+	uint32_t dump_index = 0;
+
+	while (size  > dump_index) { //printing some extra here
+		printf("\n");
+		for (unsigned int i = 0; i < MLX5_SEND_WQE_BB ; i += 16) {
+			if (!i)
+				printf("0x%x:\t", dump_index);
+			else
+				printf("\t");
+			for (unsigned int j = 0; j < 16; j += 4) {
+				printf("%02x", (((uint8_t *)((ptr)))[dump_index*MLX5_SEND_WQE_BB + i + j + 0]));
+				printf("%02x", (((uint8_t *)((ptr)))[dump_index*MLX5_SEND_WQE_BB + i + j + 1]));
+				printf("%02x", (((uint8_t *)((ptr)))[dump_index*MLX5_SEND_WQE_BB + i + j + 2]));
+				printf("%02x", (((uint8_t *)((ptr)))[dump_index*MLX5_SEND_WQE_BB + i + j + 3]));
+				printf(" ");
+		}
+		printf("\n");
+	}
+	dump_index++;
+	}
+}
+
 

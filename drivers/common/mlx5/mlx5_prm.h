@@ -409,9 +409,9 @@ struct mlx5_ifc_regexp_metadata_bits {
 };
 
 struct mlx5_ifc_regexp_match_tuple_bits {
-	uint8_t rule_id[0x20];
-	uint8_t start_ptr[0x10];
 	uint8_t length[0x10];
+	uint8_t start_ptr[0x10];
+	uint8_t rule_id[0x20];
 };
 
 /* Adding direct verbs to data-path. */

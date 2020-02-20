@@ -124,24 +124,23 @@ mlx5_regex_dev_dequeue(struct rte_regex_dev *dev, uint16_t qp_id,
 		for (j = 0; j < op->nb_matches; j++) {
 			offset = sizeof(struct rxp_response_desc) + j * (64/8);
 			op->matches[j].rule_id = DEVX_GET(regexp_match_tuple, 
-							  (uint8_t *)res +
-							  offset, rule_id);
+							  ((uint8_t *)res +
+							  offset), rule_id);
 			op->matches[j].offset = DEVX_GET(regexp_match_tuple, 
-							  (uint8_t *)res +
-							  offset, start_ptr);
+							  ((uint8_t *)res +
+							  offset), start_ptr);
 			op->matches[j].len = DEVX_GET(regexp_match_tuple, 
-							  (uint8_t *)res +
-							  offset, length);
+							  ((uint8_t *)res +
+							  offset), length);
 		}
-		queue->jobs[res->header.job_id].used = 0;
+		queue->jobs[i].used = 0;
 		rec++;
 		queue->ci++;
-		i++;
 	}
 exit:
 	for (; queue->ci < queue->pi; queue->ci++) {
-		if (queue->jobs[res->header.job_id].used == 1)
-			break;
+		/*if (queue->jobs[res->header.job_id].used == 1)
+			break;*/
 	}
 	return rec;
 }

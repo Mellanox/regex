@@ -58,9 +58,6 @@
 #include "rxp-csrs.h"
 #include "host.h"
 
-#define RXP_CSR_PROG_SET    true //true=Prog via CP;false=both CP and EM
-#define MAX_NUM_RXP_ENG     2
-
 static bool rxp_init_status = false;
 static bool rxp_prog_status = false;
 struct rxp_queue queue[RXP_NUM_QUEUES];
@@ -191,7 +188,7 @@ int rxp_scan_job(int rxp_handle, struct rxp_job_batch *ctx, uint32_t jobid,
     const uint8_t *buf, uint16_t len, uint16_t subset1, uint16_t subset2,
     uint16_t subset3, uint16_t subset4, bool enable_hpm, bool enable_anymatch)
 {
-    int i, j, ret = 0;
+    int i,  ret = 0;
     if ((rxp_handle < 0) || ((unsigned int)rxp_handle > RXP_NUM_QUEUES))
     {
         return -EPERM;
@@ -240,13 +237,6 @@ int rxp_scan_job(int rxp_handle, struct rxp_job_batch *ctx, uint32_t jobid,
     ctx->job[i].desc.subset[3] = subset4 ? htole16(subset4) : htole16(subset1);
 
     /* Check subset range not > 4095 limit? */
-    for(j = 0; j < 4; j++)
-    {
-        if (ctx->job[i].desc.subset[j] > RXP_SUBSET_ID_MAX)
-        {
-            return -EINVAL;
-        }
-    }
     ctx->job[i].data = (void *)(size_t)buf;
     ctx->job[i].len = len;
     ctx->bytes_total += len;
@@ -263,7 +253,6 @@ int rxp_submit_job(int rxp_handle, uint32_t jobid, const uint8_t *buf,
     int written;
     struct rxp_job_desc job;
     struct rxp_mlnx_job_desc data[2];
-    int i;
 
     if ((rxp_handle < 0) || ((unsigned int)rxp_handle > RXP_NUM_QUEUES))
     {
@@ -298,13 +287,6 @@ int rxp_submit_job(int rxp_handle, uint32_t jobid, const uint8_t *buf,
     job.subset[3] = subset4 ? htole16(subset4) : htole16(subset1);
 
     /* Check subset range not > 4095 limit? */
-    for(i = 0; i < 4; i++)
-    {
-        if (job.subset[i] > RXP_SUBSET_ID_MAX)
-        {
-            return -EINVAL;
-        }
-    }
 
     data[0].data_ptr = &job;
     data[0].len = sizeof(job);
@@ -329,8 +311,8 @@ __attribute__ ((visibility ("default")))
 int rxp_read_response_batch(int rxp_handle, struct rxp_response_batch *ctx)
 {
     unsigned int num_resps = 0;
-    unsigned int num_returned_resp = 0;
-    if ((rxp_handle < 0) || (rxp_handle > (int)RXP_NUM_QUEUES))
+    uint32_t num_returned_resp = 0;
+    if ((rxp_handle < 0) || ((unsigned)rxp_handle > RXP_NUM_QUEUES))
     {
         return -EPERM;
     }
@@ -511,13 +493,23 @@ int rxp_close(int rxp_handle)
         rxp_init_status = false;
 
         /*
-         * TODO: Should we disable both RXP engines at this point as last
-         *       application to use RXPs? */
+         * TODO: Should we disable both RXP engines at this point as this is
+         *       the last application to use RXPs? */
         rxp_prog_status = false; //TODO put in this simple flag for first release of libRXP!
     }
 
     return ret;
 }
+
+/*
+ * Application to call this function to set the Programming mode of the
+ * system.  Note we currently can have "Private" or "Shared" programming modes.
+ */
+void rxp_programming_mode_set(enum rxp_program_mode mode)
+{
+    mlnx_prog_mode_set(mode);
+}
+
 
 static int parse_rof(const char *filename, struct rxp_ctl_rules_pgm **rules)
 {
@@ -640,8 +632,10 @@ __attribute__ ((visibility ("default")))
 int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile,
 		      bool incremental, struct ibv_context *ctx)
 {
-    int ret, i;
-    struct rxp_ctl_rules_pgm *rules = NULL;
+    unsigned i;
+	int ret,  db_free;
+    uint32_t keep_rule_count;
+    struct rxp_ctl_rules_pgm *rules;
 
     /* Have we initilised the rxp yet? */
     if (rxp_init_status == false)
@@ -672,16 +666,6 @@ int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile,
         return -1;
     }
 
-    //TODO: Note: Remove this later, as not allowing incremental programming for
-    //      first set of tests with Mlnx!
-    if (incremental)
-    {
-        /* Return Error as currently programmed! */
-        mlnx_log("Error: RXP currently programmed - Not allowing incremental"
-                    " programming currently!\n");
-        return -1;
-    }
-
     ret = parse_rof(rulesfile, &rules);
     if (ret < 0)
     {
@@ -693,24 +677,44 @@ int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile,
         rules->hdr.cmd = RXP_CTL_RULES_PGM_INCR;
     }
 
-//TODO - Program only via CSRs for now... do changes in mlnx_write_rules later after first testing!
 //TODO - Need to check with Mlnx if need to mlnx_set_database first and whats the conseqeunces of doing that call early??
-//TODO - Decision: If using control plan programming we need to call mlnx_set_database() before writing rules below!
-//TODO - possibly need to check how big the database is and whether its within Internal TCM only, as may not need to call Mellanox function!...???
-//TODO - Note that we need to seperate the ROF file so that external instructions and programmed to External memory
-//       And internal instructions copied to RXP.
+//TODO - Check that incremental rules doesn't occur before full programming and init of RXP!?
+
+    /*
+     * Keep account of the total rules count as each programming of rules for
+     * each RXP engine will decrement this count (Private only), so reset it
+     * following use!
+     */
+    keep_rule_count = rules->count;
 
     /* Program both RXP's with the following rules...*/
-    for (i = 0; i < MAX_NUM_RXP_ENG; i++)
+    for (i = 0; i < MAX_RXP_ENGINES; i++)
     {
-        if (RXP_CSR_PROG_SET == true)
+        if (RXP_PRIVATE_PROG_MODE == mlnx_prog_mode_get())
         {
             /*
             * Need to set the mlnx_set_database immediately as when we start
             * pushing instructions to RXP, we need to be sure the RXP has the
             * capability to write to Shared/External memory!
             */
-            ret = mlnx_update_database(i);
+            db_free = mlnx_update_database(rules->hdr.cmd, i);
+
+            if (db_free < 0)
+            {
+                /* Failed to find free database to use */
+                mlnx_log("Failed to setup new database memory - Error [%d]!\n",
+                         db_free);
+                return db_free;
+            }
+
+            /*
+             * TODO: Note: As unsure what mlx5_regex_database_set() function
+             *       actually does, I'm setting up db pointer early here before
+             *       actually doing any private rule writes. Notably when start
+             *       pushing rules to RXP this database must be setup else
+             *       probably run into RXP write errors etc!??
+             */
+            ret = mlnx_set_database(i, db_free);//Ensure RXP Eng idle before run
 
             if (ret < 0)
             {
@@ -724,28 +728,74 @@ int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile,
 
             if (ret < 0)
             {
-                /* Failed to set/register database with Mellanox */
+                /* Failed to program rules */
                 mlnx_log("Failed to write rules to RXP - Error [%d]!\n", ret);
                 return ret;
             }
 
-            mlnx_log("Info: Programmed RXP %d - mlnx_init!\n", i);
+            mlnx_log("Info: Programmed RXP Eng %d - mlnx_init!\n", i);
+        }
+        else if (RXP_SHARED_PROG_MODE == mlnx_prog_mode_get())
+        {
+            /* Write all External Rules from rules file into shared/EM memory */
+
+            /* Writing External/Shared rules first as can keep RXP running*/
+            db_free = mlnx_update_database(rules->hdr.cmd, i);
+
+            if (db_free < 0)
+            {
+                /* Failed to find free database to use */
+                mlnx_log("Failed to setup new database memory - Error [%d]!\n",
+                         db_free);
+                return db_free;
+            }
+
+            /*
+             * NOTE: TODO: Might speed up the 2nd programming by copying RXP
+             *             ENG0 rules into RXP Eng1 instead of looping rules?
+             */
+
+            /* Now write rules first before taking RXP eng offline */
+            ret = mlnx_write_shared_rules(rules, rules->hdr.len, i, db_free);
+
+            if (ret < 0)
+            {
+                /* Failed to write new rules to EM */
+                mlnx_log("Failed to write rules to RXP - Error [%d]!\n", db_free);
+                return db_free;
+            }
+
+            /*
+             * Now inform Mlnx that db has changed address and RXP idle.
+             * The following call will block until RXPx is idle, it effectively
+             * disables this engine until resumed later following programming.
+             */
+            ret = mlnx_set_database(i, db_free);
+
+            if (ret < 0)
+            {
+                /* Failed to set/register database with Mellanox */
+                mlnx_log("Failed to reg database with Mellanox - Error [%d]!\n",
+                         ret);
+                return ret;
+            }
+
+            /* Finally write any internal private rules to RXP */
+            ret = mlnx_write_rules(rules, rules->hdr.len, i);
+
+            if (ret < 0)
+            {
+                /* Failed to program rules */
+                mlnx_log("Failed to write rules to RXP - Error [%d]!\n", ret);
+                return ret;
+            }
         }
         else
         {
-            //TODO: Copy External rules to Shared memory instead of getting
-            //      RXP to do this. Then stop RXP when finished programming
-            //      rules... may be more efficient this way!?
-
-            //TODO: Choose when best to write rules and call
-            //      mlnx_update_database()
-            //ret = mlnx_write_rules(rules, rules->hdr.len, i);
-            //if (ret < 0)
-            //{
-                /* Failed to set/register database with Mellanox */
-              //  mlnx_log("Failed to write rules to RXP - Error [%d]!\n", ret);
-                //return ret;
-            //}
+            /* Failed to read valid programming mode */
+            mlnx_log("Failed to read valid RXP programming mode: Mode [%d]\n",
+                     mlnx_prog_mode_get());
+            return -1;
         }
 
         /*
@@ -753,6 +803,9 @@ int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile,
          * finished successfully.
          */
         mlnx_resume_rxp(i);
+
+        /* A bit of a fudge! But ensure we keep rule cnt valid for both RXPs */
+        rules->count = keep_rule_count;
     }
 
     /* Both RXP's now programmed */
@@ -773,7 +826,7 @@ int rxp_read_stats(unsigned rxp __rte_unused, struct rxp_stats *stats)
     /* Return RXP details not multiqueue details. */
     //TODO: Make HRA Apps manage multiple RXP engine stats...
     //      For now hardcode to RXP engine 0
-    //for (i = 0; i < MAX_NUM_RXP_ENG; i++)
+    //for (i = 0; i < MAX_RXP_ENGINES; i++)
     //{
         ret = mlnx_csr_read(RXP_CSR_JOB_COUNT, &stats->num_jobs, i);
         if (ret < 0)

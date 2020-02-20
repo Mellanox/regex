@@ -201,6 +201,27 @@ struct rxp_perf_stats {
     unsigned mpfe_fifo_entries[4];
 };
 
+
+/*
+ * RXP programming mode setting
+ */
+enum rxp_program_mode {
+    RXP_MODE_NOT_DEFINED = 0,
+    RXP_SHARED_PROG_MODE,
+    RXP_PRIVATE_PROG_MODE,
+};
+
+/**
+ * Set programming mode of RXPs
+ *
+ * This is a user decision.  If the user choosed to program RXP using Shared/
+ * external memory or private memories, then this call MUST always be called.
+ * The default will be shared memory as expected to be faster
+ *
+ * @param mode  The mode of RXP programming to be used
+ */
+void rxp_programming_mode_set(enum rxp_program_mode mode);
+
 /**
  * Submit a job to the RXP
  *

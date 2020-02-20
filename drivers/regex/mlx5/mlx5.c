@@ -360,6 +360,11 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	pthread_mutex_lock(&priv_list_lock);
 	TAILQ_INSERT_TAIL(&priv_list, priv, next);
 	pthread_mutex_unlock(&priv_list_lock);
+	if (rxp_program_rules(0, "/root/dpdk_regex/app/test-regexdev/test.rof2", false, priv->ctx) < 0) {
+ 	
+		DRV_LOG(ERR, "Error: rxp_program_rules() failed");
+        	exit(-1);
+    	}
 
 	ret = rte_regex_dev_register(&priv->regex_dev);
 	if (ret < 0) {
@@ -456,6 +461,10 @@ static const struct rte_pci_id mlx5_regex_pci_id_map[] = {
 	{
 		RTE_PCI_DEVICE(PCI_VENDOR_ID_MELLANOX,
 				PCI_DEVICE_ID_MELLANOX_CONNECTX6DXVF)
+	},
+	{
+		RTE_PCI_DEVICE(PCI_VENDOR_ID_MELLANOX,
+				0xA2D6)
 	},
 	{
 		.vendor_id = 0

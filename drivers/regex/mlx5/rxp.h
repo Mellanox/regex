@@ -23,7 +23,11 @@
 #include <stdint.h>
 #endif
 
-#define RXP_API_VERSION "5.7"
+/*
+ * Note: RXP Hardware for Mellanox BF2 is v5.7.  However aiming to keep with
+ *       latest Software API code.
+ */
+#define RXP_API_VERSION "5.8.3"
 
 #define RXP_MAX_JOB_LENGTH			16384
 
@@ -53,7 +57,7 @@
 #define RXP_RESP_STATUS_PMI_SOJ			(1 << 13)
 #define RXP_RESP_STATUS_PMI_EOJ			(1 << 14)
 
-#define RXP_SUBSET_ID_MAX			4096
+#define RXP_SUBSET_ID_MAX			65535
 
 /*
  * This describes the header the RXP expects for any search data.
