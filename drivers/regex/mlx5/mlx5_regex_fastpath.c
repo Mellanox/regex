@@ -99,6 +99,7 @@ mlx5_regex_dev_dequeue(struct rte_regex_dev *dev, uint16_t qp_id,
 	struct rxp_response *res;
 	int j;
 	int cnt = 0;
+	int offset;
 
 	for (i = 0; i < nb_ops; i++) {
 		if ((queue->pi - queue->ci) == 0)
@@ -115,13 +116,22 @@ mlx5_regex_dev_dequeue(struct rte_regex_dev *dev, uint16_t qp_id,
 		cnt--;
 		if (res == NULL)
 			continue;
-		op->user_id = queue->jobs[res->header.job_id].user_id;
-		op->nb_matches = res->header.match_count;
-		op->nb_actual_matches = res->header.detected_match_count;
+		//op->user_id = queue->jobs[res->header.job_id].user_id;
+		op->nb_matches = DEVX_GET(regexp_metadata, res, match_count);
+		op->nb_actual_matches = DEVX_GET(regexp_metadata, res,
+						 detected_match_count);
+		
 		for (j = 0; j < op->nb_matches; j++) {
-			op->matches[j].rule_id = res->matches[j].rule_id;
-			op->matches[j].offset = res->matches[j].start_ptr;
-			op->matches[j].len = res->matches[j].length;
+			offset = sizeof(struct rxp_response_desc) + j * (64/8);
+			op->matches[j].rule_id = DEVX_GET(regexp_match_tuple, 
+							  (uint8_t *)res +
+							  offset, rule_id);
+			op->matches[j].offset = DEVX_GET(regexp_match_tuple, 
+							  (uint8_t *)res +
+							  offset, start_ptr);
+			op->matches[j].len = DEVX_GET(regexp_match_tuple, 
+							  (uint8_t *)res +
+							  offset, length);
 		}
 		queue->jobs[res->header.job_id].used = 0;
 		rec++;

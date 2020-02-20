@@ -628,7 +628,9 @@ int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 	match = 5;
 	mlx5_regex_set_metadata(metadata_p, 0, 0, 0, 0, match, match +1, 0, 0);
 	for(i = 0; i < match && i < rte_be_to_cpu_32(output->byte_count)/4; i++) {
-		output_p[i] = rand();
+		DEVX_SET(regexp_match_tuple, output_p + i * (64/8), rule_id, i + 1);
+		DEVX_SET(regexp_match_tuple, output_p + i * (64/8), start_ptr, i + 2);
+		DEVX_SET(regexp_match_tuple, output_p + i * (64/8), length, (i + 1) * 10);
 	}
 
 	work_id = mlx5_regex_send_nop(ctx, qid);

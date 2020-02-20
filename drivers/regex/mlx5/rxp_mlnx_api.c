@@ -370,6 +370,13 @@ int rxp_read_response_batch(int rxp_handle, struct rxp_response_batch *ctx)
         {
             struct rxp_response *resp =
                                 (struct rxp_response*)&ctx->buf[next_offset];
+            int match_count = DEVX_GET(regexp_metadata,
+                                &ctx->buf[next_offset], match_count);
+            unsigned resp_size = sizeof(resp->header) +
+                                (sizeof(resp->matches[0]) * match_count);
+#if 0
+            struct rxp_response *resp =
+                                (struct rxp_response*)&ctx->buf[next_offset];
             unsigned resp_size = sizeof(resp->header) +
                                 (sizeof(resp->matches[0]) *
                                         resp->header.match_count);
@@ -405,7 +412,7 @@ int rxp_read_response_batch(int rxp_handle, struct rxp_response_batch *ctx)
                     resp->matches[i].length = le16toh(resp->matches[i].length);
                 }
             }
-
+#endif
             next_offset += resp_size;
             num_resps++;
 

@@ -863,6 +863,7 @@ int mlnx_read_resp(struct rxp_queue *rxp_queue, uint8_t *buf, size_t buf_size,
 
             (*num_returned_resp)++;
             total_response_len += response_len;
+		buf += response_len; 
         }
     }
 
