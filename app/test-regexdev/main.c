@@ -18,18 +18,26 @@ main_loop(void)
 {
 	struct rte_regex_ops *ops[1];
 	struct rte_regex_iov *iov[1];
-	//int i;
+	char buf[100];
+	int i;
 
 	printf("oooOri size = %ld\n",sizeof(*ops[0]));
 	iov[0] = rte_malloc(NULL, sizeof(*iov[0]), 0);
+	iov[0]->buf_addr = buf;
+	iov[0]->buf_size = 100;
 	ops[0] = rte_malloc(NULL, sizeof(*ops[0]) +
 			    sizeof(struct rte_regex_match) * 255, 0);
 	ops[0]->num_of_bufs = 1;
 	ops[0]->bufs = &iov;
-	while (!force_quit) {
+	ops[0]->group_id0 = 1;
+	//while (!force_quit) {
 		rte_regex_enqueue_burst(0, 0, ops, 1);
 		rte_regex_dequeue_burst(0, 0, ops, 1);
-	}
+		printf("number of matches = %d\n",ops[0]->nb_matches);
+		for (i =0; i < ops[0]->nb_matches; i++)
+			printf("found start %d, len %d, id %d\n",
+			      ops[0]->matches[i].offset, ops[0]->matches[i].len, ops[0]->matches[i].rule_id);
+	//}
 
 	/* closing and releasing resources */
 }
