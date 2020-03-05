@@ -44,13 +44,13 @@ main_loop(void)
 	//while (!force_quit) {
 		rte_regex_enqueue_burst(0, 0, ops, 2);
 		rte_regex_dequeue_burst(0, 0, ops, 2);
-		printf("number of matches = %d\n",ops[0]->nb_matches);
+		printf("--1 number of matches = %d\n",ops[0]->nb_matches);
 		printf("--2 number of matches = %d\n",ops[1]->nb_matches);
 		for (i =0; i < ops[0]->nb_matches; i++)
-			printf("found start %d, len %d, id %d\n",
+			printf("--1 found start %d, len %d, id %d\n",
 			      ops[0]->matches[i].offset, ops[0]->matches[i].len, ops[0]->matches[i].rule_id);
 		for (i =0; i < ops[1]->nb_matches; i++)
-			printf("found --2 start %d, len %d, id %d\n",
+			printf("--2 found start %d, len %d, id %d\n",
 			      ops[1]->matches[i].offset, ops[1]->matches[i].len, ops[1]->matches[i].rule_id);
 	//}
 	printf("%s\n", buf);

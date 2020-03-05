@@ -360,7 +360,7 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	pthread_mutex_lock(&priv_list_lock);
 	TAILQ_INSERT_TAIL(&priv_list, priv, next);
 	pthread_mutex_unlock(&priv_list_lock);
-	if (rxp_program_rules(0, "/root/dpdk_regex/app/test-regexdev/test.rof2", false, priv->ctx) < 0) {
+	if (rxp_program_rules(0, "/.autodirect/mtrswgwork/orika/pegasus04_share/dpdk.org/app/test-regexdev/synthetic_internal.rof2", false, priv->ctx) < 0) {
  	
 		DRV_LOG(ERR, "Error: rxp_program_rules() failed");
         	exit(-1);
