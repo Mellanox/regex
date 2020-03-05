@@ -425,8 +425,10 @@ struct rxp_response* rxp_next_response(struct rxp_response_batch *ctx)
     {
         int resp_size;
         resp = (struct rxp_response*)&ctx->buf[ctx->next_offset];
+        int match_count = DEVX_GET(regexp_metadata,
+                        	   &ctx->buf[ctx->next_offset], match_count);
         resp_size = sizeof(resp->header) +
-                   (sizeof(resp->matches[0]) * resp->header.match_count);
+                   (sizeof(resp->matches[0]) * match_count);
         ctx->next_offset += resp_size;
     }
     else
@@ -635,7 +637,7 @@ int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile,
     unsigned i;
 	int ret,  db_free;
     uint32_t keep_rule_count;
-    struct rxp_ctl_rules_pgm *rules;
+    struct rxp_ctl_rules_pgm *rules = NULL;
 
     /* Have we initilised the rxp yet? */
     if (rxp_init_status == false)

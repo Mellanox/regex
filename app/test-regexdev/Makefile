@@ -5,7 +5,7 @@
 include $(RTE_SDK)/mk/rte.vars.mk
 
 
-APP = dpdk-test-pmd-regexdev
+APP = dpdk-test-regexdev
 
 CFLAGS += $(WERROR_FLAGS)
 CFLAGS += -DALLOW_EXPERIMENTAL_API

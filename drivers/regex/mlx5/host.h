@@ -7,7 +7,7 @@
 #define _HOST_H_
 
 #include "mlx5_regex.h"
-#include <rxp.h>
+#include "rxp.h"
 
 #define MLNX_LOGGING_ENABLED            1       //Switch off printf's.
 
