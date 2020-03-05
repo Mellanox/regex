@@ -41,6 +41,7 @@
 #include <mlx5_devx_cmds.h>
 #include <mlx5_common.h>
 #include <mlx5_common_mp.h>
+#include <mlx5_common_mr.h>
 
 #include "mlx5_defs.h"
 #include "mlx5.h"
@@ -609,7 +610,7 @@ mlx5_alloc_shared_ibctx(const struct mlx5_dev_spawn_data *spawn,
 	 * At this point the device is not added to the memory
 	 * event list yet, context is just being created.
 	 */
-	err = mlx5_mr_btree_init(&sh->mr.cache,
+	err = mlx5_mr_btree_init(&sh->share_cache.cache,
 				 MLX5_MR_BTREE_CACHE_N * 2,
 				 spawn->pci_dev->device.numa_node);
 	if (err) {
@@ -677,7 +678,7 @@ mlx5_free_shared_ibctx(struct mlx5_ibv_shared *sh)
 	if (--sh->refcnt)
 		goto exit;
 	/* Release created Memory Regions. */
-	mlx5_mr_release(sh);
+	mlx5_mr_release_cache(&sh->share_cache);
 	/* Remove from memory callback device list. */
 	rte_rwlock_write_lock(&mlx5_shared_data->mem_event_rwlock);
 	LIST_REMOVE(sh, mem_event_cb);

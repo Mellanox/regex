@@ -190,8 +190,6 @@ struct mlx5_verbs_alloc_ctx {
 	const void *obj; /* Pointer to the DPDK object. */
 };
 
-LIST_HEAD(mlx5_mr_list, mlx5_mr);
-
 /* Flow drop context necessary due to Verbs API. */
 struct mlx5_drop {
 	struct mlx5_hrxq *hrxq; /* Hash Rx queue queue. */
@@ -381,13 +379,7 @@ struct mlx5_ibv_shared {
 	struct ibv_device_attr_ex device_attr; /* Device properties. */
 	LIST_ENTRY(mlx5_ibv_shared) mem_event_cb;
 	/**< Called by memory event callback. */
-	struct {
-		uint32_t dev_gen; /* Generation number to flush local caches. */
-		rte_rwlock_t rwlock; /* MR Lock. */
-		struct mlx5_mr_btree cache; /* Global MR cache table. */
-		struct mlx5_mr_list mr_list; /* Registered MR list. */
-		struct mlx5_mr_list mr_free_list; /* Freed MR list. */
-	} mr;
+	struct mlx5_mr_share_cache share_cache;
 	/* Shared DV/DR flow data section. */
 	pthread_mutex_t dv_mutex; /* DV context mutex. */
 	uint32_t dv_meta_mask; /* flow META metadata supported mask. */

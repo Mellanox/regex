@@ -2,28 +2,16 @@
  * Copyright 2016 6WIND S.A.
  * Copyright 2020 Mellanox Technologies, Ltd
  */
-
-#ifdef PEDANTIC
-#pragma GCC diagnostic ignored "-Wpedantic"
-#endif
-#include <infiniband/verbs.h>
-#ifdef PEDANTIC
-#pragma GCC diagnostic error "-Wpedantic"
-#endif
-
 #include <rte_eal_memconfig.h>
+#include <rte_errno.h>
 #include <rte_mempool.h>
 #include <rte_malloc.h>
 #include <rte_rwlock.h>
-#include <rte_bus_pci.h>
-#include <rte_regexdev.h>
-#include <rte_regexdev_core.h>
 
-#include <mlx5_glue.h>
-
-#include "mlx5.h"
-#include "mlx5_regex_mr.h"
-#include "mlx5_regex_utils.h"
+#include "mlx5_glue.h"
+#include "mlx5_common_mp.h"
+#include "mlx5_common_mr.h"
+#include "mlx5_common_utils.h"
 
 struct mr_find_contig_memsegs_data {
 	uintptr_t addr;
@@ -34,7 +22,7 @@ struct mr_find_contig_memsegs_data {
 
 /**
  * Expand B-tree table to a given size. Can't be called with holding
- * memory_hotplug_lock or priv->mr.rwlock due to rte_realloc().
+ * memory_hotplug_lock or share_cache.rwlock due to rte_realloc().
  *
  * @param bt
  *   Pointer to B-tree structure.
@@ -59,7 +47,7 @@ mr_btree_expand(struct mlx5_mr_btree *bt, int n)
 	 * Initially cache_bh[] will be given practically enough space and once
 	 * it is expanded, expansion wouldn't be needed again ever.
 	 */
-	mem = rte_realloc(bt->table, n * sizeof(struct mlx5_mr_cache), 0);
+	mem = rte_realloc(bt->table, n * sizeof(struct mr_cache_entry), 0);
 	if (mem == NULL) {
 		/* Not an error, B-tree search will be skipped. */
 		DRV_LOG(WARNING, "failed to expand MR B-tree (%p) table",
@@ -91,7 +79,7 @@ mr_btree_expand(struct mlx5_mr_btree *bt, int n)
 static uint32_t
 mr_btree_lookup(struct mlx5_mr_btree *bt, uint16_t *idx, uintptr_t addr)
 {
-	struct mlx5_mr_cache *lkp_tbl;
+	struct mr_cache_entry *lkp_tbl;
 	uint16_t n;
 	uint16_t base = 0;
 
@@ -132,9 +120,9 @@ mr_btree_lookup(struct mlx5_mr_btree *bt, uint16_t *idx, uintptr_t addr)
  *   0 on success, -1 on failure.
  */
 static int
-mr_btree_insert(struct mlx5_mr_btree *bt, struct mlx5_mr_cache *entry)
+mr_btree_insert(struct mlx5_mr_btree *bt, struct mr_cache_entry *entry)
 {
-	struct mlx5_mr_cache *lkp_tbl;
+	struct mr_cache_entry *lkp_tbl;
 	uint16_t idx = 0;
 	size_t shift;
 
@@ -158,7 +146,7 @@ mr_btree_insert(struct mlx5_mr_btree *bt, struct mlx5_mr_cache *entry)
 	}
 	/* Insert entry. */
 	++idx;
-	shift = (bt->len - idx) * sizeof(struct mlx5_mr_cache);
+	shift = (bt->len - idx) * sizeof(struct mr_cache_entry);
 	if (shift)
 		memmove(&lkp_tbl[idx + 1], &lkp_tbl[idx], shift);
 	lkp_tbl[idx] = *entry;
@@ -193,7 +181,7 @@ mlx5_mr_btree_init(struct mlx5_mr_btree *bt, int n, int socket)
 	assert(!bt->table && !bt->size);
 	memset(bt, 0, sizeof(*bt));
 	bt->table = rte_calloc_socket("B-tree table",
-				      n, sizeof(struct mlx5_mr_cache),
+				      n, sizeof(struct mr_cache_entry),
 				      0, socket);
 	if (bt->table == NULL) {
 		rte_errno = ENOMEM;
@@ -203,7 +191,7 @@ mlx5_mr_btree_init(struct mlx5_mr_btree *bt, int n, int socket)
 	}
 	bt->size = n;
 	/* First entry must be NULL for binary search. */
-	(*bt->table)[bt->len++] = (struct mlx5_mr_cache) {
+	(*bt->table)[bt->len++] = (struct mr_cache_entry) {
 		.lkey = UINT32_MAX,
 	};
 	DEBUG("initialized B-tree %p with table %p",
@@ -243,7 +231,7 @@ mlx5_mr_btree_free(struct mlx5_mr_btree *bt)
  *   Next index to go on lookup.
  */
 static int
-mr_find_next_chunk(struct mlx5_mr *mr, struct mlx5_mr_cache *entry,
+mr_find_next_chunk(struct mlx5_mr *mr, struct mr_cache_entry *entry,
 		   int base_idx)
 {
 	uintptr_t start = 0;
@@ -295,33 +283,33 @@ mr_find_next_chunk(struct mlx5_mr *mr, struct mlx5_mr_cache *entry,
 
 /**
  * Insert a MR to the global B-tree cache. It may fail due to low-on-memory.
- * Then, this entry will have to be searched by mr_lookup_dev_list() in
+ * Then, this entry will have to be searched by mr_lookup_list() in
  * mlx5_mr_create() on miss.
  *
- * @param priv
- *   Pointer to REGEX device private context.
+ * @param share_cache
+ *   Pointer to a global shared MR cache.
  * @param mr
  *   Pointer to MR to insert.
  *
  * @return
  *   0 on success, -1 on failure.
  */
-static int
-mr_insert_dev_cache(struct mlx5_regex_priv *priv, struct mlx5_mr *mr)
+int
+mlx5_mr_insert_cache(struct mlx5_mr_share_cache *share_cache, struct mlx5_mr *mr)
 {
 	unsigned int n;
 
-	DRV_LOG(DEBUG, "REGEX dev %u inserting MR(%p) to global cache",
-		priv->regex_dev.dev_id, (void *)mr);
+	DRV_LOG(DEBUG, "Inserting MR(%p) to global cache(%p)",
+		(void *)mr, (void *)share_cache);
 	for (n = 0; n < mr->ms_bmp_n; ) {
-		struct mlx5_mr_cache entry;
+		struct mr_cache_entry entry;
 
 		memset(&entry, 0, sizeof(entry));
 		/* Find a contiguous chunk and advance the index. */
 		n = mr_find_next_chunk(mr, &entry, n);
 		if (!entry.end)
 			break;
-		if (mr_btree_insert(&priv->mr.cache, &entry) < 0) {
+		if (mr_btree_insert(&share_cache->cache, &entry) < 0) {
 			/*
 			 * Overflowed, but the global table cannot be expanded
 			 * because of deadlock.
@@ -335,8 +323,8 @@ mr_insert_dev_cache(struct mlx5_regex_priv *priv, struct mlx5_mr *mr)
 /**
  * Look up address in the original global MR list.
  *
- * @param priv
- *   Pointer to REGEX device private context.
+ * @param share_cache
+ *   Pointer to a global shared MR cache.
  * @param[out] entry
  *   Pointer to returning MR cache entry. If no match, this will not be updated.
  * @param addr
@@ -345,20 +333,20 @@ mr_insert_dev_cache(struct mlx5_regex_priv *priv, struct mlx5_mr *mr)
  * @return
  *   Found MR on match, NULL otherwise.
  */
-static struct mlx5_mr *
-mr_lookup_dev_list(struct mlx5_regex_priv *priv, struct mlx5_mr_cache *entry,
-		   uintptr_t addr)
+struct mlx5_mr *
+mlx5_mr_lookup_list(struct mlx5_mr_share_cache *share_cache,
+		    struct mr_cache_entry *entry, uintptr_t addr)
 {
 	struct mlx5_mr *mr;
 
 	/* Iterate all the existing MRs. */
-	LIST_FOREACH(mr, &priv->mr.mr_list, mr) {
+	LIST_FOREACH(mr, &share_cache->mr_list, mr) {
 		unsigned int n;
 
 		if (mr->ms_n == 0)
 			continue;
 		for (n = 0; n < mr->ms_bmp_n; ) {
-			struct mlx5_mr_cache ret;
+			struct mr_cache_entry ret;
 
 			memset(&ret, 0, sizeof(ret));
 			n = mr_find_next_chunk(mr, &ret, n);
@@ -373,10 +361,10 @@ mr_lookup_dev_list(struct mlx5_regex_priv *priv, struct mlx5_mr_cache *entry,
 }
 
 /**
- * Look up address on device.
+ * Look up address on global MR cache.
  *
- * @param priv
- *   Pointer to REGEX device private context.
+ * @param share_cache
+ *   Pointer to a global shared MR cache.
  * @param[out] entry
  *   Pointer to returning MR cache entry. If no match, this will not be updated.
  * @param addr
@@ -385,9 +373,9 @@ mr_lookup_dev_list(struct mlx5_regex_priv *priv, struct mlx5_mr_cache *entry,
  * @return
  *   Searched LKey on success, UINT32_MAX on failure and rte_errno is set.
  */
-static uint32_t
-mr_lookup_dev(struct mlx5_regex_priv *priv, struct mlx5_mr_cache *entry,
-	      uintptr_t addr)
+uint32_t
+mlx5_mr_lookup_cache(struct mlx5_mr_share_cache *share_cache,
+		     struct mr_cache_entry *entry, uintptr_t addr)
 {
 	uint16_t idx;
 	uint32_t lkey = UINT32_MAX;
@@ -399,13 +387,13 @@ mr_lookup_dev(struct mlx5_regex_priv *priv, struct mlx5_mr_cache *entry,
 	 * has to be searched by traversing the original MR list instead, which
 	 * is very slow path. Otherwise, the global cache is all inclusive.
 	 */
-	if (!unlikely(priv->mr.cache.overflow)) {
-		lkey = mr_btree_lookup(&priv->mr.cache, &idx, addr);
+	if (!unlikely(share_cache->cache.overflow)) {
+		lkey = mr_btree_lookup(&share_cache->cache, &idx, addr);
 		if (lkey != UINT32_MAX)
-			*entry = (*priv->mr.cache.table)[idx];
+			*entry = (*share_cache->cache.table)[idx];
 	} else {
 		/* Falling back to the slowest path. */
-		mr = mr_lookup_dev_list(priv, entry, addr);
+		mr = mlx5_mr_lookup_list(share_cache, entry, addr);
 		if (mr != NULL)
 			lkey = entry->lkey;
 	}
@@ -434,14 +422,29 @@ mr_free(struct mlx5_mr *mr)
 	rte_free(mr);
 }
 
+void
+mlx5_mr_rebuild_cache(struct mlx5_mr_share_cache *share_cache)
+{
+	struct mlx5_mr *mr;
+
+	DRV_LOG(DEBUG, "Rebuild dev cache[] %p", (void *)share_cache);
+	/* Flush cache to rebuild. */
+	share_cache->cache.len = 1;
+	share_cache->cache.overflow = 0;
+	/* Iterate all the existing MRs. */
+	LIST_FOREACH(mr, &share_cache->mr_list, mr)
+		if (mlx5_mr_insert_cache(share_cache, mr) < 0)
+			return;
+}
+
 /**
  * Release resources of detached MR having no online entry.
  *
- * @param priv
- *   Pointer to REGEX device private context.
+ * @param share_cache
+ *   Pointer to a global shared MR cache.
  */
 static void
-mlx5_mr_garbage_collect(struct mlx5_regex_priv *priv)
+mlx5_mr_garbage_collect(struct mlx5_mr_share_cache *share_cache)
 {
 	struct mlx5_mr *mr_next;
 	struct mlx5_mr_list free_list = LIST_HEAD_INITIALIZER(free_list);
@@ -452,11 +455,11 @@ mlx5_mr_garbage_collect(struct mlx5_regex_priv *priv)
 	 * MR can't be freed with holding the lock because rte_free() could call
 	 * memory free callback function. This will be a deadlock situation.
 	 */
-	rte_rwlock_write_lock(&priv->mr.rwlock);
+	rte_rwlock_write_lock(&share_cache->rwlock);
 	/* Detach the whole free list and release it after unlocking. */
-	free_list = priv->mr.mr_free_list;
-	LIST_INIT(&priv->mr.mr_free_list);
-	rte_rwlock_write_unlock(&priv->mr.rwlock);
+	free_list = share_cache->mr_free_list;
+	LIST_INIT(&share_cache->mr_free_list);
+	rte_rwlock_write_unlock(&share_cache->rwlock);
 	/* Release resources. */
 	mr_next = LIST_FIRST(&free_list);
 	while (mr_next != NULL) {
@@ -485,25 +488,78 @@ mr_find_contig_memsegs_cb(const struct rte_memseg_list *msl,
 
 /**
  * Create a new global Memory Region (MR) for a missing virtual address.
- * Register entire virtually contiguous memory chunk around the address.
+ * This API should be called on a secondary process, then a request is sent to
+ * the primary process in order to create a MR for the address. As the global MR
+ * list is on the shared memory, following LKey lookup should succeed unless the
+ * request fails.
  *
- * @param dev
- *   Pointer to Regex device.
+ * @param pd
+ *   Pointer to ibv_pd of a device (net, regex, vdpa,...).
+ * @param share_cache
+ *   Pointer to a global shared MR cache.
  * @param[out] entry
  *   Pointer to returning MR cache entry, found in the global cache or newly
  *   created. If failed to create one, this will not be updated.
  * @param addr
  *   Target virtual address to register.
+ * @param mr_ext_memseg_en
+ *   Configurable flag about external memory segment enable or not.
  *
  * @return
  *   Searched LKey on success, UINT32_MAX on failure and rte_errno is set.
  */
 static uint32_t
-mlx5_regex_mr_create(struct rte_regex_dev *dev,
-		     struct mlx5_mr_cache *entry, uintptr_t addr)
+mlx5_mr_create_secondary(struct ibv_pd *pd __rte_unused, uint16_t port_id,
+			 struct mlx5_mr_share_cache *share_cache,
+			 struct mr_cache_entry *entry, uintptr_t addr,
+			 unsigned int mr_ext_memseg_en __rte_unused)
 {
-	struct mlx5_regex_priv *priv =
-		container_of(dev, struct mlx5_regex_priv, regex_dev);
+	int ret;
+
+	DEBUG("Requesting MR creation for address (%p) on secondary process",
+	      (void *)addr);
+	ret = mlx5_mp_req_mr_create(port_id, addr);
+	if (ret) {
+		DEBUG("Fail to request MR creation for address (%p)",
+		      (void *)addr);
+		return UINT32_MAX;
+	}
+	rte_rwlock_read_lock(&share_cache->rwlock);
+	/* Fill in output data. */
+	mlx5_mr_lookup_cache(share_cache, entry, addr);
+	/* Lookup can't fail. */
+	assert(entry->lkey != UINT32_MAX);
+	rte_rwlock_read_unlock(&share_cache->rwlock);
+	DEBUG("MR CREATED by primary process for %p:\n"
+	      "  [0x%" PRIxPTR ", 0x%" PRIxPTR "), lkey=0x%x",
+	      (void *)addr, entry->start, entry->end, entry->lkey);
+	return entry->lkey;
+}
+
+/**
+ * Create a new global Memory Region (MR) for a missing virtual address.
+ * Register entire virtually contiguous memory chunk around the address.
+ *
+ * @param pd
+ *   Pointer to ibv_pd of a device (net, regex, vdpa,...).
+ * @param share_cache
+ *   Pointer to a global shared MR cache.
+ * @param[out] entry
+ *   Pointer to returning MR cache entry, found in the global cache or newly
+ *   created. If failed to create one, this will not be updated.
+ * @param addr
+ *   Target virtual address to register.
+ * @param mr_ext_memseg_en
+ *   Configurable flag about external memory segment enable or not.
+ *
+ * @return
+ *   Searched LKey on success, UINT32_MAX on failure and rte_errno is set.
+ */
+uint32_t
+mlx5_mr_create_primary(struct ibv_pd *pd, struct mlx5_mr_share_cache *share_cache,
+		       struct mr_cache_entry *entry, uintptr_t addr,
+		       unsigned int mr_ext_memseg_en)
+{
 	struct mr_find_contig_memsegs_data data = {.addr = addr, };
 	struct mr_find_contig_memsegs_data data_re;
 	const struct rte_memseg_list *msl;
@@ -516,24 +572,41 @@ mlx5_regex_mr_create(struct rte_regex_dev *dev,
 	uint32_t n;
 	size_t len;
 
-	DRV_LOG(DEBUG, "REGEX_dev %u creating a MR using address (%p)",
-		dev->dev_id, (void *)addr);
+	DRV_LOG(DEBUG, "Creating a MR using address (%p)", (void *)addr);
 	/*
 	 * Release detached MRs if any. This can't be called with holding either
-	 * memory_hotplug_lock or priv->mr.rwlock. MRs on the free list have
+	 * memory_hotplug_lock or share_cache->rwlock. MRs on the free list have
 	 * been detached by the memory free event but it couldn't be released
 	 * inside the callback due to deadlock. As a result, releasing resources
 	 * is quite opportunistic.
 	 */
-	mlx5_mr_garbage_collect(priv);
+	mlx5_mr_garbage_collect(share_cache);
 	/*
-	 * Just register one memseg (page). Then, memory
+	 * If enabled, find out a contiguous virtual address chunk in use, to
+	 * which the given address belongs, in order to register maximum range.
+	 * In the best case where mempools are not dynamically recreated and
+	 * '--socket-mem' is specified as an EAL option, it is very likely to
+	 * have only one MR(LKey) per a socket and per a hugepage-size even
+	 * though the system memory is highly fragmented. As the whole memory
+	 * chunk will be pinned by kernel, it can't be reused unless entire
+	 * chunk is freed from EAL.
+	 *
+	 * If disabled, just register one memseg (page). Then, memory
 	 * consumption will be minimized but it may drop performance if there
 	 * are many MRs to lookup on the datapath.
 	 */
-	data.msl = rte_mem_virt2memseg_list((void *)addr);
-	data.start = RTE_ALIGN_FLOOR(addr, data.msl->page_sz);
-	data.end = data.start + data.msl->page_sz;
+	if (!mr_ext_memseg_en) {
+		data.msl = rte_mem_virt2memseg_list((void *)addr);
+		data.start = RTE_ALIGN_FLOOR(addr, data.msl->page_sz);
+		data.end = data.start + data.msl->page_sz;
+	} else if (!rte_memseg_contig_walk(mr_find_contig_memsegs_cb, &data)) {
+		DRV_LOG(WARNING,
+			"Unable to find virtually contiguous"
+			" chunk for address (%p)."
+			" rte_memseg_contig_walk() failed.", (void *)addr);
+		rte_errno = ENXIO;
+		goto err_nolock;
+	}
 alloc_resources:
 	/* Addresses must be page-aligned. */
 	assert(rte_is_aligned((void *)data.start, data.msl->page_sz));
@@ -544,10 +617,9 @@ alloc_resources:
 	assert(msl->page_sz == ms->hugepage_sz);
 	/* Number of memsegs in the range. */
 	ms_n = len / msl->page_sz;
-	DEBUG("REGEX_dev %u extending %p to [0x%" PRIxPTR ", 0x%" PRIxPTR "),"
+	DEBUG("Extending %p to [0x%" PRIxPTR ", 0x%" PRIxPTR "),"
 	      " page_sz=0x%" PRIx64 ", ms_n=%u",
-	      dev->dev_id, (void *)addr,
-	      data.start, data.end, msl->page_sz, ms_n);
+	      (void *)addr, data.start, data.end, msl->page_sz, ms_n);
 	/* Size of memory for bitmap. */
 	bmp_size = rte_bitmap_get_memory_footprint(ms_n);
 	mr = rte_zmalloc_socket(NULL,
@@ -556,8 +628,8 @@ alloc_resources:
 				bmp_size,
 				RTE_CACHE_LINE_SIZE, msl->socket_id);
 	if (mr == NULL) {
-		DEBUG("REGEX_dev %u unable to allocate memory for a new MR of"
-		      " address (%p).", dev->dev_id, (void *)addr);
+		DEBUG("Unable to allocate memory for a new MR of"
+		      " address (%p).", (void *)addr);
 		rte_errno = ENOMEM;
 		goto err_nolock;
 	}
@@ -571,9 +643,8 @@ alloc_resources:
 	bmp_mem = RTE_PTR_ALIGN_CEIL(mr + 1, RTE_CACHE_LINE_SIZE);
 	mr->ms_bmp = rte_bitmap_init(ms_n, bmp_mem, bmp_size);
 	if (mr->ms_bmp == NULL) {
-		DEBUG("REGEX dev %u unable to initialize bitmap for a new MR of"
-		      " address (%p).",
-		      dev->dev_id, (void *)addr);
+		DEBUG("Unable to initialize bitmap for a new MR of"
+		      " address (%p).", (void *)addr);
 		rte_errno = EINVAL;
 		goto err_nolock;
 	}
@@ -589,10 +660,9 @@ alloc_resources:
 	data_re = data;
 	if (len > msl->page_sz &&
 	    !rte_memseg_contig_walk(mr_find_contig_memsegs_cb, &data_re)) {
-		DEBUG("REGEX_dev %u unable to find virtually contiguous"
+		DEBUG("Unable to find virtually contiguous"
 		      " chunk for address (%p)."
-		      " rte_memseg_contig_walk() failed.",
-		      dev->dev_id, (void *)addr);
+		      " rte_memseg_contig_walk() failed.", (void *)addr);
 		rte_errno = ENXIO;
 		goto err_memlock;
 	}
@@ -608,21 +678,20 @@ alloc_resources:
 		goto alloc_resources;
 	}
 	assert(data.msl == data_re.msl);
-	rte_rwlock_write_lock(&priv->mr.rwlock);
+	rte_rwlock_write_lock(&share_cache->rwlock);
 	/*
 	 * Check the address is really missing. If other thread already created
 	 * one or it is not found due to overflow, abort and return.
 	 */
-	if (mr_lookup_dev(priv, entry, addr) != UINT32_MAX) {
+	if (mlx5_mr_lookup_cache(share_cache, entry, addr) != UINT32_MAX) {
 		/*
 		 * Insert to the global cache table. It may fail due to
 		 * low-on-memory. Then, this entry will have to be searched
 		 * here again.
 		 */
-		mr_btree_insert(&priv->mr.cache, entry);
-		DEBUG("REGEX dev %u found MR for %p on final lookup, abort",
-		      dev->dev_id, (void *)addr);
-		rte_rwlock_write_unlock(&priv->mr.rwlock);
+		mr_btree_insert(&share_cache->cache, entry);
+		DEBUG("Found MR for %p on final lookup, abort", (void *)addr);
+		rte_rwlock_write_unlock(&share_cache->rwlock);
 		rte_mcfg_mem_read_unlock();
 		/*
 		 * Must be unlocked before calling rte_free() because
@@ -638,12 +707,12 @@ alloc_resources:
 	 */
 	for (n = 0; n < ms_n; ++n) {
 		uintptr_t start;
-		struct mlx5_mr_cache ret;
+		struct mr_cache_entry ret;
 
 		memset(&ret, 0, sizeof(ret));
 		start = data_re.start + n * msl->page_sz;
 		/* Exclude memsegs already registered by other MRs. */
-		if (mr_lookup_dev(priv, &ret, start) == UINT32_MAX) {
+		if (mlx5_mr_lookup_cache(share_cache, &ret, start) == UINT32_MAX) {
 			/*
 			 * Start from the first unregistered memseg in the
 			 * extended range.
@@ -667,34 +736,34 @@ alloc_resources:
 	 * mlx5_alloc_buf_extern() which eventually calls rte_malloc_socket()
 	 * through mlx5_alloc_verbs_buf().
 	 */
-	mr->ibv_mr = mlx5_glue->reg_mr(priv->pd, (void *)data.start, len,
+	mr->ibv_mr = mlx5_glue->reg_mr(pd, (void *)data.start, len,
 				       IBV_ACCESS_LOCAL_WRITE);
 	if (mr->ibv_mr == NULL) {
-		DEBUG("REGEX_dev %u fail to create a verbs MR for address (%p)",
-		      dev->dev_id, (void *)addr);
+		DEBUG("Fail to create a verbs MR for address (%p)",
+		      (void *)addr);
 		rte_errno = EINVAL;
 		goto err_mrlock;
 	}
 	assert((uintptr_t)mr->ibv_mr->addr == data.start);
 	assert(mr->ibv_mr->length == len);
-	LIST_INSERT_HEAD(&priv->mr.mr_list, mr, mr);
-	DEBUG("REGEX_dev %u MR CREATED (%p) for %p:\n"
+	LIST_INSERT_HEAD(&share_cache->mr_list, mr, mr);
+	DEBUG("MR CREATED (%p) for %p:\n"
 	      "  [0x%" PRIxPTR ", 0x%" PRIxPTR "),"
 	      " lkey=0x%x base_idx=%u ms_n=%u, ms_bmp_n=%u",
-	      dev->dev_id, (void *)mr, (void *)addr,
-	      data.start, data.end, rte_cpu_to_be_32(mr->ibv_mr->lkey),
+	      (void *)mr, (void *)addr, data.start, data.end,
+	      rte_cpu_to_be_32(mr->ibv_mr->lkey),
 	      mr->ms_base_idx, mr->ms_n, mr->ms_bmp_n);
 	/* Insert to the global cache table. */
-	mr_insert_dev_cache(priv, mr);
+	mlx5_mr_insert_cache(share_cache, mr);
 	/* Fill in output data. */
-	mr_lookup_dev(priv, entry, addr);
+	mlx5_mr_lookup_cache(share_cache, entry, addr);
 	/* Lookup can't fail. */
 	assert(entry->lkey != UINT32_MAX);
-	rte_rwlock_write_unlock(&priv->mr.rwlock);
+	rte_rwlock_write_unlock(&share_cache->rwlock);
 	rte_mcfg_mem_read_unlock();
 	return entry->lkey;
 err_mrlock:
-	rte_rwlock_write_unlock(&priv->mr.rwlock);
+	rte_rwlock_write_unlock(&share_cache->rwlock);
 err_memlock:
 	rte_mcfg_mem_read_unlock();
 err_nolock:
@@ -709,11 +778,53 @@ err_nolock:
 }
 
 /**
+ * Create a new global Memory Region (MR) for a missing virtual address.
+ * This can be called from primary and secondary process.
+ *
+ * @param pd
+ *   Pointer to ibv_pd of a device (net, regex, vdpa,...).
+ * @param share_cache
+ *   Pointer to a global shared MR cache.
+ * @param[out] entry
+ *   Pointer to returning MR cache entry, found in the global cache or newly
+ *   created. If failed to create one, this will not be updated.
+ * @param addr
+ *   Target virtual address to register.
+ *
+ * @return
+ *   Searched LKey on success, UINT32_MAX on failure and rte_errno is set.
+ */
+static uint32_t
+mlx5_mr_create(struct ibv_pd *pd, uint16_t port_id,
+	       struct mlx5_mr_share_cache *share_cache,
+	       struct mr_cache_entry *entry, uintptr_t addr,
+	       unsigned int mr_ext_memseg_en)
+{
+	uint32_t ret = 0;
+
+	switch (rte_eal_process_type()) {
+	case RTE_PROC_PRIMARY:
+		ret = mlx5_mr_create_primary(pd, share_cache, entry,
+					     addr, mr_ext_memseg_en);
+		break;
+	case RTE_PROC_SECONDARY:
+		ret = mlx5_mr_create_secondary(pd, port_id, share_cache, entry,
+					       addr, mr_ext_memseg_en);
+		break;
+	default:
+		break;
+	}
+	return ret;
+}
+
+/**
  * Look up address in the global MR cache table. If not found, create a new MR.
  * Insert the found/created entry to local bottom-half cache table.
  *
- * @param dev
- *   Pointer to REGEX device.
+ * @param pd
+ *   Pointer to ibv_pd of a device (net, regex, vdpa,...).
+ * @param share_cache
+ *   Pointer to a global shared MR cache.
  * @param mr_ctrl
  *   Pointer to per-queue MR control structure.
  * @param[out] entry
@@ -726,11 +837,12 @@ err_nolock:
  *   Searched LKey on success, UINT32_MAX on no match.
  */
 static uint32_t
-mlx5_regex_mr_lookup_dev(struct rte_regex_dev *dev, struct mlx5_mr_ctrl *mr_ctrl,
-			 struct mlx5_mr_cache *entry, uintptr_t addr)
+mr_lookup_caches(struct ibv_pd *pd, uint16_t port_id,
+		 struct mlx5_mr_share_cache *share_cache,
+		 struct mlx5_mr_ctrl *mr_ctrl,
+		 struct mr_cache_entry *entry, uintptr_t addr,
+		 unsigned int mr_ext_memseg_en)
 {
-	struct mlx5_regex_priv *priv =
-		container_of(dev, struct mlx5_regex_priv, regex_dev);
 	struct mlx5_mr_btree *bt = &mr_ctrl->cache_bh;
 	uint32_t lkey;
 	uint16_t idx;
@@ -739,12 +851,12 @@ mlx5_regex_mr_lookup_dev(struct rte_regex_dev *dev, struct mlx5_mr_ctrl *mr_ctrl
 	if (unlikely(bt->len == bt->size))
 		mr_btree_expand(bt, bt->size << 1);
 	/* Look up in the global cache. */
-	rte_rwlock_read_lock(&priv->mr.rwlock);
-	lkey = mr_btree_lookup(&priv->mr.cache, &idx, addr);
+	rte_rwlock_read_lock(&share_cache->rwlock);
+	lkey = mr_btree_lookup(&share_cache->cache, &idx, addr);
 	if (lkey != UINT32_MAX) {
 		/* Found. */
-		*entry = (*priv->mr.cache.table)[idx];
-		rte_rwlock_read_unlock(&priv->mr.rwlock);
+		*entry = (*share_cache->cache.table)[idx];
+		rte_rwlock_read_unlock(&share_cache->rwlock);
 		/*
 		 * Update local cache. Even if it fails, return the found entry
 		 * to update top-half cache. Next time, this entry will be found
@@ -753,9 +865,9 @@ mlx5_regex_mr_lookup_dev(struct rte_regex_dev *dev, struct mlx5_mr_ctrl *mr_ctrl
 		mr_btree_insert(bt, entry);
 		return lkey;
 	}
-	rte_rwlock_read_unlock(&priv->mr.rwlock);
+	rte_rwlock_read_unlock(&share_cache->rwlock);
 	/* First time to see the address? Create a new MR. */
-	lkey = mlx5_regex_mr_create(dev, entry, addr);
+	lkey = mlx5_mr_create(pd, port_id, share_cache, entry, addr, mr_ext_memseg_en);
 	/*
 	 * Update the local cache if successfully created a new global MR. Even
 	 * if failed to create one, there's no action to take in this datapath
@@ -772,8 +884,10 @@ mlx5_regex_mr_lookup_dev(struct rte_regex_dev *dev, struct mlx5_mr_ctrl *mr_ctrl
  * misses, search in the global MR cache table and update the new entry to
  * per-queue local caches.
  *
- * @param dev
- *   Pointer to REGEX device.
+ * @param pd
+ *   Pointer to ibv_pd of a device (net, regex, vdpa,...).
+ * @param share_cache
+ *   Pointer to a global shared MR cache.
  * @param mr_ctrl
  *   Pointer to per-queue MR control structure.
  * @param addr
@@ -782,13 +896,15 @@ mlx5_regex_mr_lookup_dev(struct rte_regex_dev *dev, struct mlx5_mr_ctrl *mr_ctrl
  * @return
  *   Searched LKey on success, UINT32_MAX on no match.
  */
-uint32_t mlx5_regex_mr_addr2mr_bh(struct rte_regex_dev *dev,
-				  struct mlx5_mr_ctrl *mr_ctrl, uintptr_t addr)
+uint32_t mlx5_mr_addr2mr_bh(struct ibv_pd *pd, uint16_t port_id,
+			    struct mlx5_mr_share_cache *share_cache,
+			    struct mlx5_mr_ctrl *mr_ctrl,
+			    uintptr_t addr, unsigned int mr_ext_memseg_en)
 {
 	uint32_t lkey;
 	uint16_t bh_idx = 0;
 	/* Victim in top-half cache to replace with new entry. */
-	struct mlx5_mr_cache *repl = &mr_ctrl->cache[mr_ctrl->head];
+	struct mr_cache_entry *repl = &mr_ctrl->cache[mr_ctrl->head];
 
 	/* Binary-search MR translation table. */
 	lkey = mr_btree_lookup(&mr_ctrl->cache_bh, &bh_idx, addr);
@@ -801,7 +917,8 @@ uint32_t mlx5_regex_mr_addr2mr_bh(struct rte_regex_dev *dev,
 		 * and local cache_bh[] will be updated inside if possible.
 		 * Top-half cache entry will also be updated.
 		 */
-		lkey = mlx5_regex_mr_lookup_dev(dev, mr_ctrl, repl, addr);
+		lkey = mr_lookup_caches(pd, port_id, share_cache, mr_ctrl,
+					repl, addr, mr_ext_memseg_en);
 		if (unlikely(lkey == UINT32_MAX))
 			return UINT32_MAX;
 	}
@@ -813,33 +930,144 @@ uint32_t mlx5_regex_mr_addr2mr_bh(struct rte_regex_dev *dev,
 }
 
 /**
- * Release all the created MRs and resources for REGEX device.
+ * Release all the created MRs and resources on global MR cache of a device.
  * list.
  *
- * @param dev
- *   Pointer to REGEX device;
+ * @param share_cache
+ *   Pointer to a global shared MR cache.
  */
 void
-mlx5_regex_mr_release(struct rte_regex_dev *dev)
+mlx5_mr_release_cache(struct mlx5_mr_share_cache *share_cache)
 {
-	struct mlx5_regex_priv *priv =
-		container_of(dev, struct mlx5_regex_priv, regex_dev);
 	struct mlx5_mr *mr_next;
 
-	rte_rwlock_write_lock(&priv->mr.rwlock);
+	rte_rwlock_write_lock(&share_cache->rwlock);
 	/* Detach from MR list and move to free list. */
-	mr_next = LIST_FIRST(&priv->mr.mr_list);
+	mr_next = LIST_FIRST(&share_cache->mr_list);
 	while (mr_next != NULL) {
 		struct mlx5_mr *mr = mr_next;
 
 		mr_next = LIST_NEXT(mr, mr);
 		LIST_REMOVE(mr, mr);
-		LIST_INSERT_HEAD(&priv->mr.mr_free_list, mr, mr);
+		LIST_INSERT_HEAD(&share_cache->mr_free_list, mr, mr);
 	}
-	LIST_INIT(&priv->mr.mr_list);
+	LIST_INIT(&share_cache->mr_list);
 	/* Free global cache. */
-	mlx5_mr_btree_free(&priv->mr.cache);
-	rte_rwlock_write_unlock(&priv->mr.rwlock);
+	mlx5_mr_btree_free(&share_cache->cache);
+	rte_rwlock_write_unlock(&share_cache->rwlock);
 	/* Free all remaining MRs. */
-	mlx5_mr_garbage_collect(priv);
+	mlx5_mr_garbage_collect(share_cache);
+}
+
+/**
+ * Flush all of the local cache entries.
+ *
+ * @param mr_ctrl
+ *   Pointer to per-queue MR local cache.
+ */
+void
+mlx5_mr_flush_local_cache(struct mlx5_mr_ctrl *mr_ctrl)
+{
+	/* Reset the most-recently-used index. */
+	mr_ctrl->mru = 0;
+	/* Reset the linear search array. */
+	mr_ctrl->head = 0;
+	memset(mr_ctrl->cache, 0, sizeof(mr_ctrl->cache));
+	/* Reset the B-tree table. */
+	mr_ctrl->cache_bh.len = 1;
+	mr_ctrl->cache_bh.overflow = 0;
+	/* Update the generation number. */
+	mr_ctrl->cur_gen = *mr_ctrl->dev_gen_ptr;
+	DRV_LOG(DEBUG, "mr_ctrl(%p): flushed, cur_gen=%d",
+		(void *)mr_ctrl, mr_ctrl->cur_gen);
+}
+
+/**
+ * Creates a memory region for external memory, that is memory which is not
+ * part of the DPDK memory segments.
+ *
+ * @param pd
+ *   Pointer to ibv_pd of a device (net, regex, vdpa,...).
+ * @param addr
+ *   Starting virtual address of memory.
+ * @param len
+ *   Length of memory segment being mapped.
+ * @param socked_id
+ *   Socket to allocate heap memory for the control structures.
+ *
+ * @return
+ *   Pointer to MR structure on success, NULL otherwise.
+ */
+struct mlx5_mr *
+mlx5_create_mr_ext(struct ibv_pd *pd, uintptr_t addr, size_t len, int socket_id)
+{
+	struct mlx5_mr *mr = NULL;
+
+	mr = rte_zmalloc_socket(NULL,
+				RTE_ALIGN_CEIL(sizeof(*mr),
+					       RTE_CACHE_LINE_SIZE),
+				RTE_CACHE_LINE_SIZE, socket_id);
+	if (mr == NULL)
+		return NULL;
+	mr->ibv_mr = mlx5_glue->reg_mr(pd, (void *)addr, len,
+				       IBV_ACCESS_LOCAL_WRITE);
+	if (mr->ibv_mr == NULL) {
+		DRV_LOG(WARNING,
+			"Fail to create a verbs MR for address (%p)",
+			(void *)addr);
+		rte_free(mr);
+		return NULL;
+	}
+	mr->msl = NULL; /* Mark it is external memory. */
+	mr->ms_bmp = NULL;
+	mr->ms_n = 1;
+	mr->ms_bmp_n = 1;
+	DRV_LOG(DEBUG,
+		"MR CREATED (%p) for external memory %p:\n"
+		"  [0x%" PRIxPTR ", 0x%" PRIxPTR "),"
+		" lkey=0x%x base_idx=%u ms_n=%u, ms_bmp_n=%u",
+		(void *)mr, (void *)addr,
+		addr, addr + len, rte_cpu_to_be_32(mr->ibv_mr->lkey),
+		mr->ms_base_idx, mr->ms_n, mr->ms_bmp_n);
+	return mr;
+}
+
+/**
+ * Dump all the created MRs and the global cache entries.
+ *
+ * @param sh
+ *   Pointer to Ethernet device shared context.
+ */
+void
+mlx5_mr_dump_cache(struct mlx5_mr_share_cache *share_cache __rte_unused)
+{
+#ifndef NDEBUG
+	struct mlx5_mr *mr;
+	int mr_n = 0;
+	int chunk_n = 0;
+
+	rte_rwlock_read_lock(&sshare_cache->rwlock);
+	/* Iterate all the existing MRs. */
+	LIST_FOREACH(mr, &share_cache->mr_list, mr) {
+		unsigned int n;
+
+		DEBUG("MR[%u], LKey = 0x%x, ms_n = %u, ms_bmp_n = %u",
+		      mr_n++, rte_cpu_to_be_32(mr->ibv_mr->lkey),
+		      mr->ms_n, mr->ms_bmp_n);
+		if (mr->ms_n == 0)
+			continue;
+		for (n = 0; n < mr->ms_bmp_n; ) {
+			struct mlx5_mr_cache ret = { 0, };
+
+			n = mr_find_next_chunk(mr, &ret, n);
+			if (!ret.end)
+				break;
+			DEBUG("  chunk[%u], [0x%" PRIxPTR ", 0x%" PRIxPTR ")",
+			      chunk_n++, ret.start, ret.end);
+		}
+	}
+	DEBUG("Dumping global cache %p", (void *)share_cache);
+	mlx5_mr_btree_dump(&share_cache->cache);
+	rte_rwlock_read_unlock(&share_cache->rwlock);
+#endif
 }
