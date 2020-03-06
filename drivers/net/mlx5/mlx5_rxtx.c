@@ -926,7 +926,7 @@ mlx5_queue_state_modify(struct rte_eth_dev *dev,
 		ret = mlx5_queue_state_modify_primary(dev, sm);
 		break;
 	case RTE_PROC_SECONDARY:
-		ret = mlx5_mp_req_queue_state_modify(dev, sm);
+		ret = mlx5_mp_req_queue_state_modify(dev->data->port_id, sm);
 		break;
 	default:
 		break;

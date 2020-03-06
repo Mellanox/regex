@@ -40,6 +40,7 @@
 #include <mlx5_glue.h>
 #include <mlx5_devx_cmds.h>
 #include <mlx5_common.h>
+#include <mlx5_common_mp.h>
 
 #include "mlx5_defs.h"
 #include "mlx5.h"
@@ -1676,7 +1677,7 @@ mlx5_init_once(void)
 		rte_rwlock_init(&sd->mem_event_rwlock);
 		rte_mem_event_callback_register("MLX5_MEM_EVENT_CB",
 						mlx5_mr_mem_event_cb, NULL);
-		ret = mlx5_mp_init_primary();
+		ret = mlx5_mp_init_primary(mlx5_mp_primary_handle);
 		if (ret)
 			goto out;
 		sd->init_done = true;
@@ -1684,7 +1685,7 @@ mlx5_init_once(void)
 	case RTE_PROC_SECONDARY:
 		if (ld->init_done)
 			break;
-		ret = mlx5_mp_init_secondary();
+		ret = mlx5_mp_init_secondary(mlx5_mp_secondary_handle);
 		if (ret)
 			goto out;
 		++sd->secondary_cnt;
@@ -2152,7 +2153,7 @@ mlx5_dev_spawn(struct rte_device *dpdk_dev,
 		if (err)
 			return NULL;
 		/* Receive command fd from primary process */
-		err = mlx5_mp_req_verbs_cmd_fd(eth_dev);
+		err = mlx5_mp_req_verbs_cmd_fd(eth_dev->data->port_id);
 		if (err < 0)
 			return NULL;
 		/* Remap UAR for Tx queues. */
