@@ -69,6 +69,12 @@ struct mlx5_database_ctx;
 static int mlx5_regex_query_cap(struct ibv_context *ctx __rte_unused,
 				struct regex_caps *caps __rte_unused)
 {
+#ifdef REGEX_MLX5_NO_REAL_HW
+	caps->supported = 1;
+	caps->num_of_engines = 2;
+	caps->log_crspace_size = 8;
+	return 0;
+#endif
 	uint32_t out[DEVX_ST_SZ_DW(query_hca_cap_out)] = {};
 	uint32_t in[DEVX_ST_SZ_DW(query_hca_cap_in)] = {};
 	int err;
@@ -96,6 +102,9 @@ static int mlx5_regex_query_cap(struct ibv_context *ctx __rte_unused,
 
 int mlx5_regex_is_supported(struct ibv_context *ibv_ctx)
 {
+#ifdef REGEX_MLX5_NO_REAL_HW
+	return 1;
+#endif
 	struct regex_caps caps;
 	int err;
 
@@ -365,11 +374,12 @@ void mlx5dv_set_metadata_seg(struct mlx5_wqe_metadata_seg *seg,
 // Return work_id, or -1 in case of err
 int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 			 struct mlx5_regex_wqe_ctrl_seg *regex_ctrl_seg,
-			 uint8_t* metadata_p, uint32_t lkey,
+			 uint8_t* metadata_p,
 			 struct mlx5_wqe_data_seg *input,
 			 struct mlx5_wqe_data_seg *output,
 			 unsigned int qid)
 {
+#ifndef REGEX_MLX5_NO_REAL_HW
 	struct mlx5_wqe_metadata_seg *meta_seg;
 	struct mlx5_wqe_ctrl_seg *ctrl_seg;
 	struct mlx5_regex_sq *sq;
@@ -408,6 +418,22 @@ int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 	int work_id = sq->pi;
 	sq->pi = (sq->pi+1)%MAX_WQE_INDEX;
 	return work_id;
+#else
+	int work_id;
+	unsigned int i, match;
+	
+	(void) regex_ctrl_seg;
+	uint8_t *output_p = (uint8_t *)be64toh((uintptr_t)output->addr);
+
+	match =  rand()%(input->byte_count/8);
+	mlx5_regex_set_metadata(metadata_p, 0, 0, 0, 0, match, match +1, 0, 0);
+	for(i = 0; i < match && i < output->byte_count/4; i++) {
+		output_p[i] = rand();
+	}
+
+	work_id = mlx5_regex_send_nop(ctx, qid);
+	return work_id;
+#endif
 }
 
 // Return work_id, or -1 in case of err
