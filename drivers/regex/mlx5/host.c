@@ -1121,7 +1121,7 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
             rxp_queue->sq_buf[i].work_id = mlx5_regex_send_work(
                                 rxp_queue->rxp_job_ctx,
                                 &rxp_queue->sq_buf[i].ctrl_seg,
-                                rxp_queue->sq_buf[i].metadata_p, mlx5_regex_get_lkey(rxp_queue->sq_buf[i].metadata_buff),
+                                rxp_queue->sq_buf[i].metadata_p,
 				&rxp_queue->sq_buf[i].input_seg,
                                 &rxp_queue->sq_buf[i].output_seg, i);
 
@@ -1314,7 +1314,9 @@ int mlnx_open(struct rxp_queue *queue)
         }
 
         /* Alloc memory for Response header data */
-        posix_memalign(&queue[q].sq_buf[i].metadata_p, 0x1000, 64);
+        int err = posix_memalign(&queue[q].sq_buf[i].metadata_p, 0x1000, 64);
+	if (err)
+		mlnx_log("Error memalign");	
 	memset(queue[q].sq_buf[i].metadata_p, 0, 64);
 
         if (!queue[q].sq_buf[i].metadata_p) {
