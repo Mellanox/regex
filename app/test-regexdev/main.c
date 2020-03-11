@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
+#include <string.h>
 
 #include <rte_malloc.h>
 #include <rte_random.h>
@@ -13,47 +14,46 @@
 
 static volatile int force_quit;
 
+#define TOTAL_JOBS 400
+#define STRING_LEN 400
 static void
 main_loop(void)
 {
-	struct rte_regex_ops *ops[2];
-	struct rte_regex_iov *iov[1];
-	struct rte_regex_iov *iov2[1];
-	char buf[100];
+	struct rte_regex_ops *ops[TOTAL_JOBS];
+	char buf[STRING_LEN];
 	int i;
 
-	sprintf(buf, " hello world                          ");
-	sprintf(buf + 15, "hello world");
-	printf("oooOri size = %ld\n",sizeof(*ops[0]));
-	iov[0] = rte_malloc(NULL, sizeof(*iov[0]), 0);
-	iov[0]->buf_addr = buf;
-	iov[0]->buf_size = 20;
-	ops[0] = rte_malloc(NULL, sizeof(*ops[0]) +
-			    sizeof(struct rte_regex_match) * 255, 0);
-	ops[0]->num_of_bufs = 1;
-	ops[0]->bufs = &iov;
-	ops[0]->group_id0 = 1;
-	iov2[0] = rte_malloc(NULL, sizeof(*iov[0]), 0);
-	iov2[0]->buf_addr = buf;
-	iov2[0]->buf_size = 100;
-	ops[1] = rte_malloc(NULL, sizeof(*ops[0]) +
-			    sizeof(struct rte_regex_match) * 255, 0);
-	ops[1]->num_of_bufs = 1;
-	ops[1]->bufs = &iov2;
-	ops[1]->group_id0 = 1;
+	memset(buf, 0, STRING_LEN);
+	const char *match_str = "hello world";
+	for (i = 0; i < 10; i++) {
+		int offset = rand()%(STRING_LEN - 50);
+		sprintf(buf + offset, "%s", match_str);
+	}
+
+	
+	printf("Posting %d random jobs on buffer %s \n", TOTAL_JOBS, buf);
+	for (i = 0; i < TOTAL_JOBS; i++) {
+		ops[i] = rte_malloc(NULL, sizeof(*ops[0]) +
+			    	sizeof(struct rte_regex_match) * TOTAL_JOBS, 0);
+		struct rte_regex_iov (*iov[1]);
+	    iov[0] = rte_malloc(NULL, sizeof(*iov[0]), 0);
+		ops[i]->bufs = &iov;
+		ops[i]->num_of_bufs = 1;
+		ops[i]->group_id0 = 1;
+		ops[i]->user_id = i;
+		int offset = rand()%(STRING_LEN - 50);
+		(*ops[i]->bufs)[0]->buf_addr = buf + offset;
+		(*ops[i]->bufs)[0]->buf_size = rand()%(STRING_LEN - offset);
+	}
+	
+	int sent = 0;
 	//while (!force_quit) {
-		rte_regex_enqueue_burst(0, 0, ops, 2);
-		rte_regex_dequeue_burst(0, 0, ops, 2);
-		printf("--1 number of matches = %d\n",ops[0]->nb_matches);
-		printf("--2 number of matches = %d\n",ops[1]->nb_matches);
-		for (i =0; i < ops[0]->nb_matches; i++)
-			printf("--1 found start %d, len %d, id %d\n",
-			      ops[0]->matches[i].offset, ops[0]->matches[i].len, ops[0]->matches[i].rule_id);
-		for (i =0; i < ops[1]->nb_matches; i++)
-			printf("--2 found start %d, len %d, id %d\n",
-			      ops[1]->matches[i].offset, ops[1]->matches[i].len, ops[1]->matches[i].rule_id);
-	//}
-	printf("%s\n", buf);
+		sent += rte_regex_enqueue_burst(0, 0, ops + sent, TOTAL_JOBS - sent);
+		int done = rte_regex_dequeue_burst(0, 0, ops + sent, TOTAL_JOBS - sent);
+		for (i = 0; i < done; i++) {
+			printf("[%ld] number of matches = %d\n",ops[0]->user_id, ops[0]->nb_matches);
+		}
+	
 	/* closing and releasing resources */
 }
 
