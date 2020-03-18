@@ -76,8 +76,8 @@
 #define RXP_SQ_BUSY         true
 
 /* Global variables */
-static bool debug_enabled = true;              //Print all general debug
-static bool debug_csrs    = true;              //Print CSRs register
+static bool debug_enabled = false;              //Print all general debug
+static bool debug_csrs    = false;              //Print CSRs register
 
 //TODO Remove rxp global
 static struct rxp_mlnx_dev rxp;
@@ -1117,21 +1117,21 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
 				(uintptr_t)rxp_queue->sq_buf[i].metadata_p);
 
             /* Return work_id, or -1 in case of err */
-	    printf("Send work qp=0x%x\n",i);
+//	    printf("Send work qp=0x%x\n",i);
             rxp_queue->sq_buf[i].work_id = mlx5_regex_send_work(
                                 rxp_queue->rxp_job_ctx,
                                 &rxp_queue->sq_buf[i].ctrl_seg,
-                                rxp_queue->sq_buf[i].metadata_p,
+                                rxp_queue->sq_buf[i].metadata_p,  mlx5_regex_get_lkey(rxp_queue->sq_buf[i].metadata_buff),
 				&rxp_queue->sq_buf[i].input_seg,
                                 &rxp_queue->sq_buf[i].output_seg, i);
 
 		
-		printf("Metadata\n");
+		/*printf("Metadata\n");
 		print_raw(rxp_queue->sq_buf[i].metadata_p, 1);
 		printf("Output\n");
 		print_raw(rxp_queue->sq_buf[i].output_p, 1);	
 		printf("Input\n");
-		print_raw(rxp_queue->sq_buf[i].input_p, 1);
+		print_raw(rxp_queue->sq_buf[i].input_p, 1);*/
             if (rxp_queue->sq_buf[i].work_id > -1)
             {
                 rxp_queue->sq_buf[i].sq_busy = true; //Queue now in use!

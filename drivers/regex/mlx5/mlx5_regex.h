@@ -10,7 +10,7 @@
 #include <mlx5_prm.h>
 void print_raw(void*, size_t cnt);
 
-#define REGEX_MLX5_NO_REAL_HW 1
+//#define REGEX_MLX5_NO_REAL_HW 1
 
 struct mlx5_regex_wqe_ctrl_seg {
        __be32 le_subset_id_0_subset_id_1;
@@ -97,7 +97,7 @@ int mlx5_regex_engine_resume(struct ibv_context *ctx, int engine_id);
  */
 int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 			 struct mlx5_regex_wqe_ctrl_seg *seg,
-			 uint8_t* metadata_p,
+			 uint8_t* metadata_p,  uint32_t lkey,
 			 struct mlx5_wqe_data_seg *input,
 			 struct mlx5_wqe_data_seg *output,
 			 unsigned int sq);
