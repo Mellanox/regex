@@ -14,8 +14,12 @@
 
 static volatile int force_quit;
 
-#define TOTAL_JOBS 400
+#define TOTAL_JOBS 320
 #define STRING_LEN 400
+
+struct sw_job {
+	struct rte_regex_iov (*iov[1]);
+};
 static void
 main_loop(void)
 {
@@ -31,13 +35,13 @@ main_loop(void)
 	}
 
 	
+	struct sw_job sw_jobs[TOTAL_JOBS];
+
 	printf("Posting %d random jobs on buffer %s \n", TOTAL_JOBS, buf);
 	for (i = 0; i < TOTAL_JOBS; i++) {
-		ops[i] = rte_malloc(NULL, sizeof(*ops[0]) +
-			    	sizeof(struct rte_regex_match) * TOTAL_JOBS, 0);
-		struct rte_regex_iov (*iov[1]);
-	    iov[0] = rte_malloc(NULL, sizeof(*iov[0]), 0);
-		ops[i]->bufs = &iov;
+		ops[i] = rte_malloc(NULL, sizeof(*ops[0]), 0);
+   	        sw_jobs[i].iov[0] = rte_malloc(NULL, sizeof(* sw_jobs[i].iov[0]), 0);
+		ops[i]->bufs = &sw_jobs[i].iov;
 		ops[i]->num_of_bufs = 1;
 		ops[i]->group_id0 = 1;
 		ops[i]->user_id = i;
@@ -46,14 +50,19 @@ main_loop(void)
 		(*ops[i]->bufs)[0]->buf_size = rand()%(STRING_LEN - offset);
 	}
 	
-	int sent = 0;
-	//while (!force_quit) {
-		sent += rte_regex_enqueue_burst(0, 0, ops + sent, TOTAL_JOBS - sent);
-		int done = rte_regex_dequeue_burst(0, 0, ops + sent, TOTAL_JOBS - sent);
-		for (i = 0; i < done; i++) {
-			printf("[%ld] number of matches = %d\n",ops[0]->user_id, ops[0]->nb_matches);
+	int sent = 0, total_sent=0;
+	while (total_sent < TOTAL_JOBS) {
+		sent = rte_regex_enqueue_burst(0, 0, ops + total_sent, TOTAL_JOBS - total_sent);
+		int done = 0;
+		while(done < sent) {
+			int d = rte_regex_dequeue_burst(0, 0, ops, sent);
+			for (i = 0; i < d; i++) {
+				printf("[%d] [%ld] number of matches = %d\n",i,ops[i]->user_id, ops[i]->nb_matches);
+			}
+			done += d;
 		}
-	
+		total_sent += sent;
+	}
 	/* closing and releasing resources */
 }
 
