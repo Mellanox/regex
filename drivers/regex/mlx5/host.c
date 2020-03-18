@@ -76,18 +76,24 @@
 #define RXP_SQ_BUSY         true
 
 /* Global variables */
-static bool debug_enabled = false;              //Print all general debug
-static bool debug_csrs    = false;              //Print CSRs register
+static bool debug_enabled = true;              //Print all general debug
+static bool debug_csrs    = true;              //Print CSRs register
 
 //TODO Remove rxp global
 static struct rxp_mlnx_dev rxp;
 
+#define pld_usleep(US) usleep(US*3)
+//TODO put this mode into its own QUEUE!
+//TODO: Check within Incremental mode if safe to virgin program in Shared mode,
+//      then to do incremental update in Private mode? Should be ok! Double check!
+/* Set programming mode default to shared */ //TODO Private until get inital testing sorted!!
+static enum rxp_program_mode rxp_prog_mode = RXP_PRIVATE_PROG_MODE;//RXP_SHARED_PROG_MODE;
 
 /* ***************************************************************** */
 /* ***************** Private Func Declarations ********************* */
 /* ***************************************************************** */
 static int rxp_init(uint8_t rxp_eng);
-static int rxp_init_rtru(uint8_t rxp_eng);
+static int rxp_init_rtru(uint8_t rxp_eng, uint32_t init_bits);
 static void rxp_disable(uint8_t rxp_eng);
 static void rxp_enable(uint8_t rxp_eng);
 static void rxp_dump_csrs(const char *info, uint8_t rxp_eng);
@@ -132,7 +138,7 @@ static void rxp_dump_csrs(const char *info, uint8_t rxp_eng)
         for (i = 0; i < 31; i++)
         {
             if (mlx5_regex_register_read(rxp.device_ctx, rxp_eng,
-                    RXP_CSR_BASE_ADDRESS + (RXP_CSR_WIDTH * i), &reg))
+                    RXP_RTRU_CSR_BASE_ADDRESS + (RXP_CSR_WIDTH * i), &reg))
             {
                 mlnx_log("Error: Failed to read RTRU CSRs (rxp_dump_csrs)!");
                 return;
@@ -142,7 +148,7 @@ static void rxp_dump_csrs(const char *info, uint8_t rxp_eng)
                      info ? info : "", i, reg);
         }
 
-        /* MQ registers */
+        /* STAT CSRs */
         for (i = 0; i < 31; i++)
         {
             if (mlx5_regex_register_read(rxp.device_ctx, rxp_eng,
@@ -225,6 +231,7 @@ static int rxp_poll_csr_for_value(struct rxp_mlnx_dev *rxp, uint32_t *value,
         if (mlx5_regex_register_read(rxp->device_ctx, rxp_eng, address, value))
         {
             mlnx_log("Error: Failed to poll CSR!");
+            rxp_dump_csrs("Failed", rxp_eng);
             return -1;
         }
 
@@ -239,14 +246,15 @@ static int rxp_poll_csr_for_value(struct rxp_mlnx_dev *rxp, uint32_t *value,
             ret = i;  /* return number of cycles it took. */
             break;
         }
-        usleep(1000);
+        pld_usleep(1000);
     }
 
+   
     return ret;
 }
 
-
-static int rxp_init_rtru(uint8_t rxp_eng)
+//TODO add incremental programming in here...
+static int rxp_init_rtru(uint8_t rxp_eng, uint32_t init_bits)
 {
     uint32_t ctrl_value;
     uint32_t poll_value;
@@ -281,25 +289,32 @@ static int rxp_init_rtru(uint8_t rxp_eng)
                               RXP_RTRU_CSR_CTRL, ctrl_value);
 
     /* Set the init_mode == 0 in the rtru ctrl CSR */
-    //TODO - Check for Mlnx System if we need RXP to do EM init too??
-    //I have removed:
-    //RXP_RTRU_CSR_CTRL_INIT_MODE_IM_L1_L2_EM here!
-    ctrl_value |= RXP_RTRU_CSR_CTRL_INIT_MODE_IM_L1_L2;
+    /* Note: Not required to init EM as Shared within Mnlx */
+    ctrl_value |= init_bits;
     mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
                               RXP_RTRU_CSR_CTRL, ctrl_value);
 
     /* Need to sleep for a short period after pulsing the rtru init bit.  */
-    usleep(20000);
+    pld_usleep(20000);
 
     /* Poll the rtru status CSR until all the init done bits are set. */
     mlnx_log("Info: Waiting for RXP rule memory to complete init");
 
     /* Check that the following bits are set in the RTRU_CSR. */
-    expected_value = RXP_RTRU_CSR_STATUS_IM_INIT_DONE |
+    /* Note: Not expecting EM bit to be set for Mlnx */
+    if (init_bits == RXP_RTRU_CSR_CTRL_INIT_MODE_L1_L2)
+    {
+        /* Must be incremental mode */
+        expected_value = RXP_RTRU_CSR_STATUS_L1C_INIT_DONE |
+            RXP_RTRU_CSR_STATUS_L2C_INIT_DONE;
+    }
+    else
+    {
+        expected_value = RXP_RTRU_CSR_STATUS_IM_INIT_DONE |
             RXP_RTRU_CSR_STATUS_L1C_INIT_DONE |
             RXP_RTRU_CSR_STATUS_L2C_INIT_DONE;
-            //TODO re-add following line if required to enable EM programming!
-           //RXP_RTRU_CSR_STATUS_EM_INIT_DONE;
+    }
+
     expected_mask = expected_value;
 
     ret = rxp_poll_csr_for_value(&rxp, &poll_value,
@@ -330,20 +345,25 @@ static int rxp_write_rules_via_cp(struct rxp_rof_entry *rules,
 {
     int i;
     uint32_t tmp;
+    int err = 0;
 
     for (i = 0; i < count; i++) 
     {
         tmp = (uint32_t)rules[i].value;
-        mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
+        err |= mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
                                   RXP_RTRU_CSR_DATA_0, tmp);
         tmp = (uint32_t)(rules[i].value >> 32);
-        mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
+        err |= mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
                                   RXP_RTRU_CSR_DATA_0 + RXP_CSR_WIDTH, tmp);
         tmp = rules[i].addr;
-        mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
+        err |= mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
                                   RXP_RTRU_CSR_ADDR, tmp);
+	if (err) {
+		mlnx_log("Error: failed to write rule");
+		return -1;
+	}
     }
-
+    mlnx_log("Written %d rules", count);
     return 0;
 }
 
@@ -462,7 +482,7 @@ static int rxp_init(uint8_t rxp_eng)
     mlx5_regex_register_write(rxp.device_ctx, rxp_eng, RXP_CSR_CTRL, reg);
 
     /* Wait for the RXP to init */
-    usleep(20000);
+    pld_usleep(20000);
 
     /* Wait for status init bit to be set */
     ret = rxp_poll_csr_for_value(&rxp, &reg,
@@ -491,17 +511,9 @@ static int rxp_init(uint8_t rxp_eng)
 
     ret = 0;
 
-    /*
-     * Experimentation has shown that we need to run the rtru
-     * initialisation twice.
-     * Otherwise, we are experiencing massively degraded
-     * performance with larger rule sets.
-     * This is a temporary workaround so that we can continue
-     * testing while the problem is analyzed from a firmware
-     * perspective.
-     */
-    rxp_init_rtru(rxp_eng);
-    ret = rxp_init_rtru(rxp_eng);
+    /* TODO - do I still need to do this rtru init call twice? */
+    rxp_init_rtru(rxp_eng, RXP_RTRU_CSR_CTRL_INIT_MODE_IM_L1_L2);
+    ret = rxp_init_rtru(rxp_eng, RXP_RTRU_CSR_CTRL_INIT_MODE_IM_L1_L2);
 
     if (ret >= 0)
     {
@@ -540,7 +552,6 @@ static int rxp_init(uint8_t rxp_eng)
     return ret;
 }
 
-
 /* ************************************************************* */
 /* ********************* Global Functions ********************** */
 /* ************************************************************* */
@@ -557,6 +568,21 @@ void mlnx_log(const char *fmt, ...)
     va_end(args);
 }
 #endif
+
+/*
+ * This should be set by application, but defaulted above to Private for
+ * first set of testing.
+ */
+void mlnx_prog_mode_set(enum rxp_program_mode mode)
+{
+    rxp_prog_mode = mode;
+}
+
+
+enum rxp_program_mode mlnx_prog_mode_get(void)
+{
+    return rxp_prog_mode;
+}
 
 
 uint32_t mlnx_csr_write(uint32_t *value, uint32_t csr_addr_offset,
@@ -593,25 +619,50 @@ int mlnx_csr_read(uint32_t csr_addr_offset, uint32_t *returnVal,
 }
 
 
-int mlnx_write_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count,
+/* Private programming of RXP, not used for MLNX EM programming */
+int mlnx_write_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count __rte_unused,
                      uint8_t rxp_eng)
 {
     unsigned int pending;
     uint32_t block, reg, val, rule_cnt, rule_offset, rtru_max_num_entries;
     int ret;
 
-    if (count < sizeof(struct rxp_ctl_hdr))
+    if (rxp_prog_mode == RXP_MODE_NOT_DEFINED)
     {
         return -EINVAL;
     }
 
     //TODO possibly add mutex_lock in here for new Mlnx API as multiple apps
-    //may attempt to program RXPs!
+    //may attempt to program RXPs - resolve this when tackle multi app!
+
+    if (rules->hdr.len == 0 || rules->hdr.cmd < RXP_CTL_RULES_PGM ||
+            rules->hdr.cmd > RXP_CTL_RULES_PGM_INCR)
+    {
+        return -EINVAL;
+    }
 
     /* For a non-incremental rules program, re-init the RXP */
     if (rules->hdr.cmd == RXP_CTL_RULES_PGM)
     {
+        //TODO double check RXP Eng is disabled before proceeding?
+        //Note: MLNX supposed to be doing this in set_database call!?
+
         ret = rxp_init(rxp_eng);
+        if (ret < 0)
+        {
+            return ret;
+        }
+    }
+    else if (rules->hdr.cmd == RXP_CTL_RULES_PGM_INCR)
+    {
+        //TODO Don't re-init if someone is still using the RXP Engine!? */
+        //Note: MLNX supposed to be doing this in set_database call!?
+
+        /*
+         * Flush L1 and L2 by calling init_rtru with MODE_L1_L2.
+         * Don't touch the External memory for the incremental update.
+         */
+        ret = rxp_init_rtru(rxp_eng, RXP_RTRU_CSR_CTRL_INIT_MODE_L1_L2);
         if (ret < 0)
         {
             return ret;
@@ -650,44 +701,48 @@ int mlnx_write_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count,
     /* RTRU num entries in the first 16bits of capabilities */
     rtru_max_num_entries = (rtru_max_num_entries & 0x00FF);
 
-
-/*
- * ****************************************************************************
- * *** TODO: Change below as need to be able to copy RXP_ROF_ENTRY_EM
- * *** instructions to MLNX shared memory...
- * ***      1. CSR internal instructions only. 2) CRS and External programming                              * *** Note: We need to strip out external instructions if external programming.
- * ****************************************************************************
- */
-
     rule_cnt = 0;
     pending = 0;
     while (rules->count > 0)
     {
         if ((rules->rules[rule_cnt].type == RXP_ROF_ENTRY_INST) ||
             (rules->rules[rule_cnt].type == RXP_ROF_ENTRY_IM) ||
-            (rules->rules[rule_cnt].type == RXP_ROF_ENTRY_EM)) 
+            (rules->rules[rule_cnt].type == RXP_ROF_ENTRY_EM))
         {
-            pending++;
-            rule_cnt++;
-
-            /*
-             * If we're parsing the last rule, or if we've reached the maximum
-             * number of rules for this batch, then flush the rules batch to
-             * the RXP.
-             */
-            if (rules->count == 1 || pending == rtru_max_num_entries)
+            if ((rules->rules[rule_cnt].type == RXP_ROF_ENTRY_EM) &&
+                    (rxp_prog_mode == RXP_SHARED_PROG_MODE))
             {
-                rule_offset = (rule_cnt - pending);
+                /*
+                 * Skip EM rules as managed previously offline for
+                 * better performance
+                 */
+                rule_cnt++;
+            }
+            else
+            {
+                pending++;
+                rule_cnt++;
 
-                ret = rxp_flush_rules(&rules->rules[rule_offset], pending,
-                                      rxp_eng);
-
-                if (!ret)
+                /*
+                 * If we're parsing the last rule, or if we've reached the
+                 * maximum number of rules for this batch, then flush the rules
+                 * batch to the RXP.
+                 */
+                if (rules->count == 1 || pending == rtru_max_num_entries)
                 {
-                    mlnx_log("Error: CP read failed (flush_rules)!");
-                    return ret;
+                    rule_offset = (rule_cnt - pending);
+
+                    ret = rxp_flush_rules(&rules->rules[rule_offset], pending,
+                                        rxp_eng);
+
+                    if (ret)
+                    {
+                        mlnx_log("Error: CP read failed (flush_rules)!");
+			rxp_dump_csrs("CP read failed", rxp_eng);
+                        return ret;
+                    }
+                    pending = 0;
                 }
-                pending = 0;
             }
         }
         else if ((rules->rules[rule_cnt].type == RXP_ROF_ENTRY_EQ) ||
@@ -703,7 +758,7 @@ int mlnx_write_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count,
                 ret = rxp_flush_rules(&rules->rules[rule_offset], pending,
                                       rxp_eng);
 
-                if (!ret)
+                if (ret)
                 {
                     mlnx_log("Error: CP read failed (flush_rules)!");
                     return ret;
@@ -726,16 +781,36 @@ int mlnx_write_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count,
 
             ret = mlx5_regex_register_read(rxp.device_ctx, rxp_eng, reg, &val);
 
-            if (!ret)
+            if (ret)
             {
                 mlnx_log("Error: CP read failed (FR) RXP Engine [%d]-Err [%d]!",
                          rxp_eng, ret);
                 return ret;
             }
 
-            if (((rules->rules[rule_cnt].type == RXP_ROF_ENTRY_EQ) ||
-                (rules->rules[rule_cnt].type == RXP_ROF_ENTRY_CHECKSUM))
-                && (val != rules->rules[rule_cnt].value))
+            /* Must only check RXP_ROF_ENTRY_CHECKSUM_EX_EM in Shared mode */
+            if ((rxp_prog_mode == RXP_SHARED_PROG_MODE) &&
+                ((rules->rules[rule_cnt].type == RXP_ROF_ENTRY_CHECKSUM_EX_EM) &&
+                    (val != rules->rules[rule_cnt].value)))
+            {
+                mlnx_log("Info: Unexpected value for reg %x" PRIu32
+                            ", got %x" PRIu32 ", expected %" PRIx64 ".",
+                            rules->rules[rule_cnt].addr, val,
+                            rules->rules[rule_cnt].value);
+                return -EINVAL;
+            }
+            else if ((rxp_prog_mode == RXP_PRIVATE_PROG_MODE) &&
+                    (rules->rules[rule_cnt].type == RXP_ROF_ENTRY_CHECKSUM) &&
+                        (val != rules->rules[rule_cnt].value))
+            {
+                mlnx_log("Info: Unexpected value for reg %x" PRIu32
+                            ", got %x" PRIu32 ", expected %" PRIx64 ".",
+                            rules->rules[rule_cnt].addr, val,
+                            rules->rules[rule_cnt].value);
+                return -EINVAL;
+            }
+            else if ((rules->rules[rule_cnt].type == RXP_ROF_ENTRY_EQ) &&
+                            (val != rules->rules[rule_cnt].value))
             {
                 mlnx_log("Info: Unexpected value for reg %x" PRIu32
                             ", got %x" PRIu32 ", expected %" PRIx64 ".",
@@ -787,6 +862,60 @@ int mlnx_write_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count,
     return ret;
 }
 
+/*
+ * Function to program External RXP Rules via application and not RXP.
+ * -> This is known as Shared memory mode.
+ */
+int mlnx_write_shared_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count,
+                     uint8_t rxp_eng, uint8_t db_to_use)
+{
+    uint32_t rule_cnt;
+
+    if (rxp_prog_mode == RXP_MODE_NOT_DEFINED)
+    {
+        return -EINVAL;
+    }
+
+    if ((rules->count == 0) || (count == 0))
+    {
+        return -EINVAL;
+    }
+
+    rule_cnt = 0;
+    rxp.rxp_db_desc[db_to_use].database_byte_cnt = 0;
+
+    while (rule_cnt < rules->count)
+    {
+        if ((rules->rules[rule_cnt].type == RXP_ROF_ENTRY_EM)
+            && (rxp_prog_mode == RXP_SHARED_PROG_MODE))
+        {
+            /* This is programming directly to Shared Memory without RXP! */
+
+            /* Check EM size before write */
+            if ((rxp.rxp_db_desc[db_to_use].database_byte_cnt + sizeof(uint64_t))
+                    >= MAX_DB_SIZE)
+            {
+                /* Error as exeeded database memory size*/
+                mlnx_log("Error: Database exceeded max allocation! [Eng:%d]",
+                            rxp_eng);
+                return -1;
+            }
+
+            /* TODO:Check the data is written correctly here (Byte order)? */
+            memcpy((uint8_t*)((uint8_t*)rxp.rxp_db_desc[db_to_use].database_ptr +
+                        rxp.rxp_db_desc[db_to_use].database_byte_cnt),
+                            &rules->rules[rule_cnt].value, sizeof(uint64_t));
+
+            /* Start keeping account of data written to database memory */
+            rxp.rxp_db_desc[db_to_use].database_byte_cnt += sizeof(uint64_t);
+        }
+
+        rule_cnt++;
+    }
+
+    return 1;
+}
+
 
 /*
  * Function to retrieve the response header/s and matches from Mlnx CQueues
@@ -812,8 +941,9 @@ int mlnx_read_resp(struct rxp_queue *rxp_queue, uint8_t *buf, size_t buf_size,
             /* Must have response in Buffer, so copy into application buffer */
             //TODO: where is regexp_metadata declared...?
             //      Possibly add to sq_buff structure.
+            //      Is regexp_metadata an bug here for mult queue/app!???
             match_count = DEVX_GET(regexp_metadata,
-                                rxp_queue->sq_buf[i].metadata_p, match_count);
+                                (uint8_t *)rxp_queue->sq_buf[i].metadata_p + 32, match_count);
 
             if (match_count < 0)
             {
@@ -829,7 +959,6 @@ int mlnx_read_resp(struct rxp_queue *rxp_queue, uint8_t *buf, size_t buf_size,
              * Check that we have enough space in app buffer to copy
              * response+matche/s?
              */
-            //TODO ensure create new Match Tuple of 64bits!
             tmp_match_len = match_count * (sizeof(struct rxp_match_tuple));
             response_len = tmp_match_len + sizeof(struct rxp_response_desc);
 
@@ -846,7 +975,7 @@ int mlnx_read_resp(struct rxp_queue *rxp_queue, uint8_t *buf, size_t buf_size,
             /* Continue to copy response data to app */
             //TODO: check Endianess here?
             //      As may need to read from regexp_metadata struct?
-            memcpy(buf, rxp_queue->sq_buf[i].metadata_p,
+            memcpy(buf, (uint8_t*)rxp_queue->sq_buf[i].metadata_p + 32,
                     sizeof(struct rxp_response_desc));
 
             //TODO: Yuval is this correct way to get output_p or we need to do DEVX_get?
@@ -863,6 +992,7 @@ int mlnx_read_resp(struct rxp_queue *rxp_queue, uint8_t *buf, size_t buf_size,
 
             (*num_returned_resp)++;
             total_response_len += response_len;
+		buf += response_len; 
         }
     }
 
@@ -893,11 +1023,12 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
                        struct rxp_mlnx_job_desc *data,
                        uint16_t job_count)
 {
-    int bytes_written = 0;
+    unsigned bytes_written = 0;
     uint8_t tmp_ctrl;
     struct rxp_job_desc *job;
     uint16_t joblen = 0;
     uint32_t i, num_jobs_processed = 0;
+    struct mlx5_wqe_data_seg metadata_seg;
 
     /* Check if user trying to submit more jobs than SQs? */
     if (job_count >= NUM_SQS)
@@ -906,11 +1037,12 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
         mlnx_log("Warning: Attempt to transmit more jobs than queues!");
 
         //Note, dont need to Error here, as can simply restrict...
-		//warning above enough to catch for now!
+        //warning above enough to catch for now!
     }
 
     if (job_count == 0)
     {
+	printf(" job cnt = 0");
         return -1;
     }
 
@@ -920,6 +1052,8 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
         if (num_jobs_processed >= job_count)
         {
             /* Exit as no more jobs to send */
+	    printf(" Exit as no more jobs to send");
+	  
             break;
         }
 
@@ -955,8 +1089,8 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
             rxp_queue->sq_buf[i].job_id = job->job_id;
 
             /*
-             * Note: jobid going into metadata, joblen taken from input data seg
-             * and ctrl field mapped above
+             * Note: joblen taken from input data seg and ctrl field mapped
+             *       above.  JobId not used in Mlnx API so stored above.
              */
             //TODO: NOTE:  consider Endiness as doing memcpy instead of DEVX...?
             mlx5_regex_set_ctrl_seg(&rxp_queue->sq_buf[i].ctrl_seg, 0,
@@ -965,9 +1099,9 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
             /* Copy job data into input ptr */
             memcpy(rxp_queue->sq_buf[i].input_p,
                         (uint8_t*)data[num_jobs_processed * 2 + 1].data_ptr,
-                        joblen);
+                        data[num_jobs_processed * 2 + 1].len);
 
-            mlx5dv_set_data_seg(&rxp_queue->sq_buf[i].input_seg, joblen,
+            mlx5dv_set_data_seg(&rxp_queue->sq_buf[i].input_seg, data[num_jobs_processed * 2 + 1].len,
                                 mlx5_regex_get_lkey(
                                 rxp_queue->sq_buf[i].input_buff),
                                 (uintptr_t)rxp_queue->sq_buf[i].input_p);
@@ -978,15 +1112,26 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
                                     rxp_queue->sq_buf[i].output_buff),
                                 (uintptr_t)rxp_queue->sq_buf[i].output_p);
 
+	    mlx5dv_set_data_seg(&metadata_seg, 64,
+			    	mlx5_regex_get_lkey(rxp_queue->sq_buf[i].metadata_buff),
+				(uintptr_t)rxp_queue->sq_buf[i].metadata_p);
+
             /* Return work_id, or -1 in case of err */
+	    printf("Send work qp=0x%x\n",i);
             rxp_queue->sq_buf[i].work_id = mlx5_regex_send_work(
                                 rxp_queue->rxp_job_ctx,
                                 &rxp_queue->sq_buf[i].ctrl_seg,
-                                mlx5_regex_get_lkey(
-                                    rxp_queue->sq_buf[i].metadata_buff),
-                                &rxp_queue->sq_buf[i].input_seg,
+                                rxp_queue->sq_buf[i].metadata_p, mlx5_regex_get_lkey(rxp_queue->sq_buf[i].metadata_buff),
+				&rxp_queue->sq_buf[i].input_seg,
                                 &rxp_queue->sq_buf[i].output_seg, i);
 
+		
+		printf("Metadata\n");
+		print_raw(rxp_queue->sq_buf[i].metadata_p, 1);
+		printf("Output\n");
+		print_raw(rxp_queue->sq_buf[i].output_p, 1);	
+		printf("Input\n");
+		print_raw(rxp_queue->sq_buf[i].input_p, 1);
             if (rxp_queue->sq_buf[i].work_id > -1)
             {
                 rxp_queue->sq_buf[i].sq_busy = true; //Queue now in use!
@@ -1047,8 +1192,7 @@ int mlnx_poll(struct rxp_queue *rxp_queue, bool *rx_ready, bool *tx_ready)
         {
             //TODO: Check if can simply use work_id = "i", not sure if work_id
             //      maps SQ's if only 1 job per SQ!?
-            ret = mlx5_regex_poll(rxp_queue->rxp_job_ctx, i,
-                                   rxp_queue->sq_buf[i].work_id);
+            ret = mlx5_regex_poll(rxp_queue->rxp_job_ctx, i);
 
             /* 1 = response waiting, 0 = no completion, -1 = error */
             if (ret > 0)
@@ -1130,7 +1274,7 @@ int mlnx_open(struct rxp_queue *queue)
     queue[q].q_id = q;
 
     /*
-     * Can open up multip regex devices per thread/application.
+     * Can open up multiple regex devices per thread/application.
      * Note: This open regex is not related to the physcial number of
      * RXP engines.
      */
@@ -1170,11 +1314,11 @@ int mlnx_open(struct rxp_queue *queue)
         }
 
         /* Alloc memory for Response header data */
-        queue[q].sq_buf[i].metadata_p = malloc(sizeof(struct rxp_response_desc));
+        posix_memalign(&queue[q].sq_buf[i].metadata_p, 0x1000, 64);
+	memset(queue[q].sq_buf[i].metadata_p, 0, 64);
 
-        if (!queue[q].sq_buf[i].metadata_p)
-        {
-            mlnx_log("Error: Failed to create metadata buffer!");
+        if (!queue[q].sq_buf[i].metadata_p) {
+	    mlnx_log("Error: Failed to create metadata buffer!");
             goto tidyup_regex_ctx;
         }
 
@@ -1204,7 +1348,7 @@ int mlnx_open(struct rxp_queue *queue)
 
         queue[q].sq_buf[i].metadata_buff = mlx5_regex_reg_buffer(
                         queue[q].rxp_job_ctx, queue[q].sq_buf[i].metadata_p,
-                        sizeof(struct rxp_response_desc));
+                        64);
 
         if (!queue[q].sq_buf[i].metadata_buff)
         {
@@ -1337,10 +1481,14 @@ int mlnx_release(struct rxp_queue *queue)
  */
 int mlnx_close(struct rxp_mlnx_dev *rxp)
 {
-    munmap(rxp->rxp_db_desc[0].database_ptr, MAX_DB_SIZE);
-    munmap(rxp->rxp_db_desc[1].database_ptr, MAX_DB_SIZE);
-    mlx5dv_devx_umem_dereg(rxp->rxp_db_desc[0].db_umem);
-    mlx5dv_devx_umem_dereg(rxp->rxp_db_desc[1].db_umem);
+    unsigned int i;
+
+    for (i = 0; i < (MAX_RXP_ENGINES + RXP_SHADOW_EM_COUNT); i++)
+    {
+        munmap(rxp->rxp_db_desc[i].database_ptr, MAX_DB_SIZE);
+        mlx5dv_devx_umem_dereg(rxp->rxp_db_desc[i].db_umem);
+    }
+
     //mlx5_free_context(rxp->device_ctx); //No longer in Mlnx API try:
     free(rxp->device_ctx); //TODO check if this is right
     ibv_free_device_list(rxp->dev_list);
@@ -1351,41 +1499,110 @@ int mlnx_close(struct rxp_mlnx_dev *rxp)
 /* mlnx_resume_rxp: This function is used to Resume RXP engine */
 int mlnx_resume_rxp(uint8_t rxp_eng)
 {
-    mlx5_regex_engine_go(rxp.device_ctx, rxp_eng);
+    mlx5_regex_engine_resume(rxp.device_ctx, rxp_eng);
 
     return 1;
 }
 
-int mlnx_set_database(uint8_t rxp_eng)
-{
-    rxp.rxp_db_desc[rxp_eng].db_ctx.umem_id =
-                                    rxp.rxp_db_desc[rxp_eng].db_umem->umem_id;
-    rxp.rxp_db_desc[rxp_eng].db_ctx.offset = 0,
-
-    /* Inform Mellanox HW where the database is pointing to in shared memory */
-    mlx5_regex_database_set(rxp.device_ctx, rxp_eng /*engine_id*/,
-                            &rxp.rxp_db_desc[rxp_eng].db_ctx);
-
-    return 1;
-}
-
-
-/*
- * mlnx_update_database: This function will stop the RXP engine and setup
- * pointer to RXP ruleset/database (TODO: Note: Pending Mlnx responses to what
- * else database_set does?)
- */
-int mlnx_update_database(uint8_t rxp_eng)
+int mlnx_set_database(uint8_t rxp_eng, uint8_t db_to_use)
 {
     /*
      * Stop RXP before doing any programming. Command will return when RXP
      * engine is idle.
      */
+	return 1;
     mlx5_regex_engine_stop(rxp.device_ctx, rxp_eng);
 
-    mlnx_set_database(rxp_eng);
+    rxp.rxp_db_desc[db_to_use].db_ctx.umem_id =
+                                    rxp.rxp_db_desc[db_to_use].db_umem->umem_id;
+    rxp.rxp_db_desc[db_to_use].db_ctx.offset = 0,
+
+    /* Inform Mellanox HW where the database is pointing to in shared memory */
+    mlx5_regex_database_set(rxp.device_ctx, rxp_eng /*engine_id*/,
+                            &rxp.rxp_db_desc[db_to_use].db_ctx);
 
     return 1;
+}
+
+/*
+ * mlnx_update_database: This function will stop the RXP engine and setup
+ * pointer to RXP ruleset/database (TODO: Note: Pending Mlnx responses to what
+ * else database_set does eg. if not setting this what is the default addr
+ * if only have private rules do we need to bother setting database etc..?)
+ */
+int mlnx_update_database(uint16_t prog_command, uint8_t rxp_eng)
+{   
+    unsigned int i;
+    uint8_t db_free = RXP_MAX_NOT_USED; //MAX unusable value.
+    uint8_t rxp_eng_currently_assigned = RXP_MAX_NOT_USED;
+
+    if (prog_command == RXP_CTL_RULES_PGM_INCR)
+    {
+        /*
+         * TODO: When testing, decide if we should actually allow a swap of db
+         *       ptrs as might be best to keep with same db without swapping and
+         *       simply update. So depending on the size of updates and type of
+         *       rules 6s or 7s! This would only benefit Shared memory mode!
+         */
+        //Possibly return rxp_eng currently assigned db number
+        //return ...
+    }
+
+    /* Check which database rxp_eng is currently located if any? */
+    for (i = 0; i < (MAX_RXP_ENGINES + RXP_SHADOW_EM_COUNT); i++)
+    {
+        if (rxp.rxp_db_desc[i].db_assigned_to_eng_num == rxp_eng)
+        {
+            rxp_eng_currently_assigned = i;
+            break;
+        }
+    }
+
+    /*
+     * If private mode then, we can keep the same db ptr as RXP will be
+     * programming EM itself if necessary, however need to see if programmed yet
+     */
+    if ((RXP_PRIVATE_PROG_MODE == mlnx_prog_mode_get()) &&
+            (rxp_eng_currently_assigned != RXP_MAX_NOT_USED))
+    {
+        return rxp_eng_currently_assigned;
+    }
+
+    /* TODO ensure set all DB memory to 0xff before setting db up! */
+
+    /* Check for inactive db memory to use */
+    for (i = 0; i < (MAX_RXP_ENGINES + RXP_SHADOW_EM_COUNT); i++)
+    {
+        if (rxp.rxp_db_desc[i].db_active == false)
+        {
+            /* Set this db to active now as free to use */
+            rxp.rxp_db_desc[i].db_active = true;
+
+            /* Now unassign last db index in use by RXP Eng if any? */
+            if (rxp_eng_currently_assigned != RXP_MAX_NOT_USED)
+            {
+                rxp.rxp_db_desc[rxp_eng_currently_assigned].db_active = false;
+                rxp.rxp_db_desc[rxp_eng_currently_assigned].
+                                    db_assigned_to_eng_num = RXP_MAX_NOT_USED;
+
+                /* Set all DB memory to 0x00 before setting up Database */
+                memset(rxp.rxp_db_desc[i].database_ptr, 0x00, MAX_DB_SIZE);
+            }
+
+            /* Now reassign new db index with RXP Eng */
+            rxp.rxp_db_desc[i].db_assigned_to_eng_num = rxp_eng;
+
+            db_free = i;
+            break;
+        }
+    }
+
+    if (db_free == RXP_MAX_NOT_USED)
+    {
+        return -1;
+    }
+
+    return db_free;
 }
 
 /*
@@ -1393,16 +1610,12 @@ int mlnx_update_database(uint8_t rxp_eng)
  *  - So it will check for capabilities
  *  - Open a device
  *  - Setup relevant structures ready for Program Database/Ruleset for RXP
- *  - TODO:Inform Mellanox of correct Database to use.
- *
  */
-int mlnx_init(void)
+int mlnx_init(struct ibv_context *ctx)
 {
     int err;
     uint32_t fpga_ident = 0;
-    int supported;
-    int devn = 0;
-    struct mlx5dv_context_attr attr = {0};
+  
 
     if (pthread_mutex_init(&(rxp.lock), NULL) != 0)
     {
@@ -1410,35 +1623,7 @@ int mlnx_init(void)
         return -1;
     }
 
-    rxp.dev_list = ibv_get_device_list(&rxp.num_devices);
-
-    if (rxp.num_devices == 0)
-    {
-        mlnx_log("Platform Info: No devices found!\n");
-        goto tidyup;
-    }
-
-    for (int i = 0; i < rxp.num_devices; i++)
-    {
-        mlnx_log("Platform Info: Device Name           : %s",
-                 ibv_get_device_name(rxp.dev_list[i]));
-        mlnx_log("Platform Info: Device GUID           : %d",
-                 ibv_get_device_guid(rxp.dev_list[i]));
-        mlnx_log("Platform Info: Device Type           : %d",
-                 rxp.dev_list[i]->node_type);
-        mlnx_log("Platform Info: Device Transport Type : %d",
-                 rxp.dev_list[i]->transport_type);
-    }
-
-    attr.flags = MLX5DV_CONTEXT_FLAGS_DEVX;
-
-    if (!mlx5dv_is_supported(rxp.dev_list[devn]))
-    {
-        mlnx_log("Platform Info: Devx not supported!");
-        goto tidyup;
-    }
-
-    rxp.device_ctx = mlx5dv_open_device(rxp.dev_list[devn], &attr);
+    rxp.device_ctx = ctx;
     if (!rxp.device_ctx)
     {
         mlnx_log("Platform Info: Failed to open device %s", strerror(errno));
@@ -1447,73 +1632,51 @@ int mlnx_init(void)
 
     //TODO Check if mlx5dv_open_device needs a corresponding close_device call if fail below???
 
-    supported = mlx5_regex_is_supported(rxp.device_ctx);
+    int supported = mlx5_regex_is_supported(rxp.device_ctx);
 
     if (!supported)
     {
         mlnx_log("Regexp not supported");
         goto tidyup_context;
     }
-
-    /*
-     * Setup database 1 for first RXP engine 0 (RXP 0)
-     * Setup huge pages for rule set
-     */
-    rxp.rxp_db_desc[0].database_ptr = mmap(NULL, MAX_DB_SIZE, PROT_READ |
-            PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS | MAP_POPULATE |
-            MAP_HUGETLB, -1, 0);
-
-    if (!rxp.rxp_db_desc[0].database_ptr)
+#if 0
+    /* Setup database memories for both RXP engines + reprogram memory */
+    for (i = 0; i < (MAX_RXP_ENGINES + RXP_SHADOW_EM_COUNT); i++)
     {
-        mlnx_log("Platform Info: Allocation failed!");
-        goto tidyup_context;
-    }
+        rxp.rxp_db_desc[i].database_ptr = mmap(NULL, MAX_DB_SIZE, PROT_READ |
+            PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS | MAP_POPULATE |
+                MAP_HUGETLB, -1, 0);
 
-    /* Register the memory with Mellanox */
-    rxp.rxp_db_desc[0].db_umem = mlx5dv_devx_umem_reg(
-                                                rxp.device_ctx,
-                                                rxp.rxp_db_desc[0].database_ptr,
+        if (!rxp.rxp_db_desc[i].database_ptr)
+        {
+            mlnx_log("Platform Info: Allocation failed!");
+            goto tidyup_mem;
+        }
+
+        /* Register the memory with Mellanox */
+        rxp.rxp_db_desc[i].db_umem = mlx5dv_devx_umem_reg(
+                                        rxp.device_ctx,
+                                            rxp.rxp_db_desc[i].database_ptr,
                                                 MAX_DB_SIZE, 7);
 
-    if (!rxp.rxp_db_desc[0].db_umem)
-    {
-        mlnx_log("Registration failed");
-        mlnx_log("Please make sure huge pages in the system");
-        mlnx_log("Hint: cat /proc/meminfo");
-        mlnx_log("      echo NUM_PAGES > /proc/sys/vm/nr_hugepages");
-        goto tidyup_umem0;
+        if (!rxp.rxp_db_desc[i].db_umem)
+        {
+            mlnx_log("Registration failed");
+            mlnx_log("Please make sure huge pages in the system");
+            mlnx_log("Hint: cat /proc/meminfo");
+            mlnx_log("      echo NUM_PAGES > /proc/sys/vm/nr_hugepages");
+            goto tidyup_mem;
+        }
+
+        /* Ensure set all DB memory to 0x00 before setting up DB for RXP! */
+        memset(rxp.rxp_db_desc[i].database_ptr, 0x00, MAX_DB_SIZE);
+
+        /* No data currenly in database */
+        rxp.rxp_db_desc[i].database_byte_cnt = 0;
+        rxp.rxp_db_desc[i].db_active = false;
+        rxp.rxp_db_desc[i].db_assigned_to_eng_num = RXP_MAX_NOT_USED;
     }
-
-    /*
-     * Setup 2nd database memory for RXP engine 1 (RXP 1).
-     * Notably both databases will be identicle. Merged remotely!
-     * Setup huge pages for 2nd rule set
-     */
-    rxp.rxp_db_desc[1].database_ptr = mmap(NULL, MAX_DB_SIZE, PROT_READ |
-            PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS | MAP_POPULATE |
-            MAP_HUGETLB, -1, 0);
-
-    if (!rxp.rxp_db_desc[1].database_ptr)
-    {
-        mlnx_log("Platform Info: Allocation failed!");
-        goto tidyup_mmap0;
-    }
-
-    /* Register the memory with Mellanox */
-    rxp.rxp_db_desc[1].db_umem = mlx5dv_devx_umem_reg(
-                                                rxp.device_ctx,
-                                                rxp.rxp_db_desc[1].database_ptr,
-                                                MAX_DB_SIZE, 7);
-
-    if (!rxp.rxp_db_desc[1].db_umem)
-    {
-        mlnx_log("Registration failed");
-        mlnx_log("Please make sure huge pages in the system");
-        mlnx_log("Hint: cat /proc/meminfo");
-        mlnx_log("      echo NUM_PAGES > /proc/sys/vm/nr_hugepages");
-        goto tidyup_umem1;
-    }
-
+#endif
     /*
      * ***********************************************************************
      * ***   Not setting up database pointer yet, wait until after programming
@@ -1524,11 +1687,11 @@ int mlnx_init(void)
                                    RXP_CSR_IDENTIFIER, &fpga_ident);
 
     fpga_ident = (fpga_ident & (0x0000FFFF));
-    if ((!err) || (fpga_ident != 0x5254))
+    if (err || (fpga_ident != 0x5254))
     {
         mlnx_log("Error: RXP ID from RXP Eng 0 [Error:%d; FPGA ID:0x%x]",
                  err, fpga_ident);
-        goto tidyup_mmap1;
+        goto tidyup_mem;
     }
 
     mlnx_log("Info: FPGA Identifier for RXP Engine 0 - addr:0x%x:0x%x",
@@ -1538,11 +1701,11 @@ int mlnx_init(void)
                                    RXP_CSR_IDENTIFIER, &fpga_ident);
 
     fpga_ident = (fpga_ident & (0x0000FFFF));
-    if ((!err) || (fpga_ident != 0x5254))
+    if (err || (fpga_ident != 0x5254))
     {
         mlnx_log("Error: RXP ID from RXP Eng 1 [Error:%d; FPGA ID:0x%x]",
                  err, fpga_ident);
-        goto tidyup_mmap1;
+        goto tidyup_mem;
     }
 
     mlnx_log("Info: FPGA Identifier for RXP Engine 1 - addr:0x%x:0x%x",
@@ -1550,14 +1713,21 @@ int mlnx_init(void)
 
     return 1;
 
-tidyup_mmap1:
-    munmap(rxp.rxp_db_desc[1].database_ptr, MAX_DB_SIZE);
-tidyup_umem1:
-    mlx5dv_devx_umem_dereg(rxp.rxp_db_desc[1].db_umem);
-tidyup_mmap0:
-    munmap(rxp.rxp_db_desc[0].database_ptr, MAX_DB_SIZE);
-tidyup_umem0:
-    mlx5dv_devx_umem_dereg(rxp.rxp_db_desc[0].db_umem);
+tidyup_mem:
+#if 0
+    for (i = 0; i < (MAX_RXP_ENGINES + RXP_SHADOW_EM_COUNT); i++)
+    {
+        if (rxp.rxp_db_desc[i].database_ptr)
+        {
+            munmap(rxp.rxp_db_desc[i].database_ptr, MAX_DB_SIZE);
+        }
+
+        if (rxp.rxp_db_desc[i].db_umem)
+        {
+            mlx5dv_devx_umem_dereg(rxp.rxp_db_desc[i].db_umem);
+        }
+    }
+#endif
 tidyup_context:
     //mlx5_free_context(rxp.device_ctx);//No longer in Mlnx API try:
     //free(rxp.device_ctx); //TODO check if this is right 

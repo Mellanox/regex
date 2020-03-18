@@ -17,6 +17,8 @@ extern "C" {
 /* The structure definitions live in the kernel headers */
 #include "rxp.h"
 
+#include <infiniband/mlx5dv.h>
+
 /**
  * \mainpage
  *
@@ -199,6 +201,27 @@ struct rxp_perf_stats {
     unsigned mpfe_fifo_entries[4];
 };
 
+
+/*
+ * RXP programming mode setting
+ */
+enum rxp_program_mode {
+    RXP_MODE_NOT_DEFINED = 0,
+    RXP_SHARED_PROG_MODE,
+    RXP_PRIVATE_PROG_MODE,
+};
+
+/**
+ * Set programming mode of RXPs
+ *
+ * This is a user decision.  If the user choosed to program RXP using Shared/
+ * external memory or private memories, then this call MUST always be called.
+ * The default will be shared memory as expected to be faster
+ *
+ * @param mode  The mode of RXP programming to be used
+ */
+void rxp_programming_mode_set(enum rxp_program_mode mode);
+
 /**
  * Submit a job to the RXP
  *
@@ -367,7 +390,7 @@ struct rxp_response *rxp_next_response(struct rxp_response_batch *ctx);
  * @param  rxp    RXP instance to use. Usually 0, unless there are multiple RXPs present in the system.
  * @return Handle to the RXP; -1 if an error occurs. errno is set as above.
  */
-int rxp_open(unsigned rxp);
+int rxp_open(unsigned rxp, struct ibv_context *ctx);
 
 /**
  * Close the connection to the RXP
@@ -406,7 +429,7 @@ int rxp_queue_status(int rxp_handle, bool *rx_ready, bool *tx_ready);
  * @param rulesfile   ROF file to program into the RXP
  * @param incremental Indicate whether this is an incremental update, and thus that the RXP should not be reset.
  */
-int rxp_program_rules(unsigned rxp, const char *rulesfile, bool incremental);
+int rxp_program_rules(unsigned rxp, const char *rulesfile, bool incremental, struct ibv_context *ctx);
 
 /**
  * Program the provided ROF structure into the RXP

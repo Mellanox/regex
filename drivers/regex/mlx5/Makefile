@@ -7,15 +7,19 @@ include $(RTE_SDK)/mk/rte.vars.mk
 LIB = librte_pmd_mlx5_regex.a
 
 # Sources.
+SRCS-$(CONFIG_RTE_LIBRTE_MLX5_REGEX_PMD) += mlx5.c
 SRCS-$(CONFIG_RTE_LIBRTE_MLX5_REGEX_PMD) += mlx5_regex.c
 SRCS-$(CONFIG_RTE_LIBRTE_MLX5_REGEX_PMD) += rxp_mlnx_api.c
 SRCS-$(CONFIG_RTE_LIBRTE_MLX5_REGEX_PMD) += host.c
+SRCS-$(CONFIG_RTE_LIBRTE_MLX5_REGEX_PMD) += mlx5_regex_mr.c
+SRCS-$(CONFIG_RTE_LIBRTE_MLX5_REGEX_PMD) += mlx5_regex_fastpath.c
 
 # Basic CFLAGS.
 CFLAGS += -O3
 CFLAGS += -std=c11 -Wall -Wextra
 CFLAGS += -g
 CFLAGS += -I$(RTE_SDK)/drivers/common/mlx5
+CFLAGS += -I$(RTE_SDK)/lib/librte_regexdev
 CFLAGS += -I$(BUILDDIR)/drivers/common/mlx5
 CFLAGS += -D_BSD_SOURCE
 CFLAGS += -D_DEFAULT_SOURCE
@@ -27,6 +31,7 @@ LDLIBS += -lm
 LDLIBS += -lrte_eal -lrte_mbuf
 LDLIBS += -lrte_kvargs
 LDLIBS += -lrte_bus_pci
+LDLIBS += -lrte_regexdev
 
 # A few warnings cannot be avoided in external headers.
 CFLAGS += -Wno-error=cast-qual
