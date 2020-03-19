@@ -121,6 +121,7 @@ int rxp_dispatch_jobs(int rxp_handle, struct rxp_job_batch *ctx)
     }
     if (ctx->count == 0)
     {
+	printf("CNT = 0\n");
         return 0;
     }
 
@@ -191,6 +192,7 @@ int rxp_scan_job(int rxp_handle, struct rxp_job_batch *ctx, uint32_t jobid,
     int i,  ret = 0;
     if ((rxp_handle < 0) || ((unsigned int)rxp_handle > RXP_NUM_QUEUES))
     {
+        printf("-EPERM\n");
         return -EPERM;
     }
     if (len > RXP_MAX_JOB_LENGTH)
@@ -217,11 +219,15 @@ int rxp_scan_job(int rxp_handle, struct rxp_job_batch *ctx, uint32_t jobid,
     if (ctx->count >= ctx->max_jobs ||
             (ctx->bytes_threshold && ctx->bytes_total >= ctx->bytes_threshold))
     {
+	printf("ctx->count %ld\n", ctx->count);
         ret = rxp_dispatch_jobs(rxp_handle, ctx);
         if (ret < 0)
             return ret;
-        else if (ret == 0)
+        else if (ret == 0) {
+
+        printf("-EBUSY\n");
             return -EBUSY;
+	}
         /* +ve means we submitted ok, so have room to add */
     }
     i = ctx->count++;
@@ -322,6 +328,7 @@ int rxp_read_response_batch(int rxp_handle, struct rxp_response_batch *ctx)
     ctx->next_offset = 0;
 
     /* Read responses from Mlnx AP */
+    //printf("ctx->buf_size = %ld\n", ctx->buf_size);
     int read_ret = mlnx_read_resp(&queue[rxp_handle], ctx->buf, ctx->buf_size,
                                   &num_returned_resp);
 

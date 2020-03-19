@@ -14,8 +14,8 @@
 
 static volatile int force_quit;
 
-#define TOTAL_JOBS 320
-#define STRING_LEN 400
+#define TOTAL_JOBS 400
+#define STRING_LEN 16000
 
 struct sw_job {
 	struct rte_regex_iov (*iov[1]);
@@ -27,17 +27,20 @@ main_loop(void)
 	char buf[STRING_LEN];
 	int i;
 
-	memset(buf, 0, STRING_LEN);
+	for (i = 0; i < STRING_LEN; i++)
+		buf[i] = '.';
+	buf[STRING_LEN-1] = 0;	
 	const char *match_str = "hello world";
 	for (i = 0; i < 10; i++) {
 		int offset = rand()%(STRING_LEN - 50);
-		sprintf(buf + offset, "%s", match_str);
+		strncpy(buf + offset, match_str, strlen(match_str));
 	}
 
+	sprintf(buf + STRING_LEN -strlen(match_str)-1, "%s", match_str);
 	
 	struct sw_job sw_jobs[TOTAL_JOBS];
 
-	printf("Posting %d random jobs on buffer %s \n", TOTAL_JOBS, buf);
+	//printf("Posting %d random jobs on buffer %s \n", TOTAL_JOBS, buf);
 	for (i = 0; i < TOTAL_JOBS; i++) {
 		ops[i] = rte_malloc(NULL, sizeof(*ops[0]), 0);
    	        sw_jobs[i].iov[0] = rte_malloc(NULL, sizeof(* sw_jobs[i].iov[0]), 0);
@@ -47,12 +50,13 @@ main_loop(void)
 		ops[i]->user_id = i;
 		int offset = rand()%(STRING_LEN - 50);
 		(*ops[i]->bufs)[0]->buf_addr = buf + offset;
-		(*ops[i]->bufs)[0]->buf_size = rand()%(STRING_LEN - offset);
+		(*ops[i]->bufs)[0]->buf_size = (STRING_LEN - offset);
 	}
 	
 	int sent = 0, total_sent=0;
 	while (total_sent < TOTAL_JOBS) {
 		sent = rte_regex_enqueue_burst(0, 0, ops + total_sent, TOTAL_JOBS - total_sent);
+		printf("sent = %d\n", sent);
 		int done = 0;
 		while(done < sent) {
 			int d = rte_regex_dequeue_burst(0, 0, ops, sent);
@@ -109,8 +113,9 @@ main(int argc, char **argv)
 		rte_exit(EXIT_FAILURE, "Invalid EAL arguments!\n");
 
 	force_quit = 0;
-	signal(SIGINT, signal_handler);
-	signal(SIGTERM, signal_handler);
+	if (0) {signal(SIGINT, signal_handler);
+		signal(SIGTERM, signal_handler);
+	}
 
 	dev_count = rte_regex_dev_count();
 	printf("regex devices = %d\n", dev_count);

@@ -45,6 +45,7 @@ struct mlx5_regex_ctx {
 	uint32_t eq;
 	void *eq_buff;
 	struct mlx5dv_devx_uar *uar;
+	int uuar;
 };
 struct mlx5_database_ctx;
 
@@ -297,7 +298,7 @@ static int mlx5_regex_wqs_open(struct mlx5_regex_ctx *ctx,
 	}
 
 	ctx->uar = mlx5_glue->devx_alloc_uar(ctx->ibv_ctx, 0);
-
+	ctx->uuar = 0;
 	if (!ctx->uar || !ctx->uar->base_addr) {
 		DRV_LOG(ERR, "uar creation failed %s\n", strerror(errno));
 		return -1;
@@ -407,16 +408,17 @@ int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
 	memcpy((uint8_t*)meta_seg + sizeof(*meta_seg) + sizeof(*input),
 	       output, sizeof(*output));
 
-	uint64_t *doorbell_addr = (uint64_t *)((uint8_t *)ctx->uar->base_addr + 0x800);
-	asm volatile("" ::: "memory");
-	sq->qp_dbr[MLX5_SND_DBR] = htobe32(sq->pi & 0xffff);
-	asm volatile("" ::: "memory");
-	*doorbell_addr = *(uint64_t *)ctrl_seg;
-	asm volatile("" ::: "memory");
-
-	//print_raw(ctrl_seg, 1);
 	int work_id = sq->pi;
+	uint64_t *doorbell_addr = (uint64_t *)((uint8_t *)ctx->uar->base_addr + 0x800);
+	rte_cio_wmb();
 	sq->pi = (sq->pi+1)%MAX_WQE_INDEX;
+	sq->qp_dbr[MLX5_SND_DBR] = htobe32(sq->pi);
+	rte_wmb();
+	*doorbell_addr = *(volatile uint64_t *)ctrl_seg;
+	rte_wmb();
+	//printf("Post wqe for qp 0x%x:\n", sq->qpn);
+	//print_raw(ctrl_seg, 1);
+	ctx->uuar = !ctx->uuar;
 	return work_id;
 #else
 	int work_id;
@@ -455,15 +457,16 @@ int mlx5_regex_send_nop(struct mlx5_regex_ctx *ctx, unsigned int qid)
 			    MLX5_WQE_CTRL_CQ_UPDATE, 1, 0,
 			    0);
 
-	uint64_t *doorbell_addr = (uint64_t *)((uint8_t *)ctx->uar->base_addr + 0x800);
-	asm volatile("" ::: "memory");
-	sq->qp_dbr[MLX5_SND_DBR] = htobe32(sq->pi & 0xffff);
-	asm volatile("" ::: "memory");
-	*doorbell_addr = *(uint64_t *)ctrl_seg;
-	asm volatile("" ::: "memory");
-
 	int work_id = sq->pi;
+	uint64_t *doorbell_addr = (uint64_t *)((uint8_t *)ctx->uar->base_addr + 0x800);
+	rte_cio_wmb();
 	sq->pi = (sq->pi+1)%MAX_WQE_INDEX;
+	sq->qp_dbr[MLX5_SND_DBR] = rte_cpu_to_be_32(sq->pi);
+	/* Ensure ordering between DB record and BF copy. */
+	rte_wmb();
+	*doorbell_addr = *(uint64_t *)ctrl_seg;
+	rte_wmb();
+
 	return work_id;
 }
 
@@ -473,6 +476,7 @@ int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sqid)
 	struct mlx5_cqe64 *cqe;
 	size_t next_cqe_offset;
 
+	printf("Before Poll cqe 0x%x for qp 0x%x:\n", sq->cq.cqn, sq->qpn);
 	next_cqe_offset =  sq->cq.ci % SQ_SIZE * sizeof(*cqe);
 	cqe = (struct mlx5_cqe64 *)((uint8_t*)sq->cq.cq_buff + next_cqe_offset);
 	int retry = 1600000;
@@ -493,7 +497,7 @@ int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sqid)
 		       mlx5dv_get_cqe_opcode(cqe), be32toh(cqe->byte_cnt));
 		return -1;
 	}
-	//printf("Poll cqe:\n");
+	printf("After Poll cqe 0x%x for qp 0x%x:\n", sq->cq.cqn, sq->qpn);
 	//print_raw(cqe, 1);	
 	return 1;
 }
