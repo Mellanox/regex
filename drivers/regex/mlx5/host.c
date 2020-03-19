@@ -961,7 +961,7 @@ int mlnx_read_resp(struct rxp_queue *rxp_queue, uint8_t *buf, size_t buf_size,
              */
             tmp_match_len = match_count * (sizeof(struct rxp_match_tuple));
             response_len = tmp_match_len + sizeof(struct rxp_response_desc);
-
+	    //printf("size match len %d, response len %d, match_count = %d, total = %d, size = %ld\n",tmp_match_len, response_len, match_count, total_response_len, buf_size);
             if ((total_response_len + response_len) > buf_size)
             {
                 /* Going to overflow app buffer so do not copy */
@@ -1052,7 +1052,7 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
         if (num_jobs_processed >= job_count)
         {
             /* Exit as no more jobs to send */
-	    printf(" Exit as no more jobs to send");
+//	    printf(" Exit as no more jobs to send");
 	  
             break;
         }
@@ -1073,7 +1073,7 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
              * to pass to ctrl_set function below
              */
             job = (struct rxp_job_desc *)(data[num_jobs_processed * 2].data_ptr);
-            joblen = data[num_jobs_processed * 2].len;
+            joblen = data[num_jobs_processed * 2 + 1].len;
 
             //TODO: For Yuval: I still dont know 100% how you want me to
             //      figure this control field out! (If actually only 1bit,
@@ -1213,7 +1213,8 @@ int mlnx_poll(struct rxp_queue *rxp_queue, bool *rx_ready, bool *tx_ready)
             else if (ret == 0)
             {
                 /* Clear any old values */
-                rxp_queue->sq_buf[i].sq_resp_ready = false;
+               	if (rxp_queue->sq_buf[i].sq_resp_ready == true)
+			*rx_ready = true;
             }
             else
             {
