@@ -1209,20 +1209,6 @@ struct rte_regex_match {
  * @see RTE_REGEX_DEV_ATTR_MAX_PREFIX
  */
 
-/** Struct to hold scatter gather elements in ops. */
-struct rte_regex_iov {
-	RTE_STD_C11
-	union {
-		uint64_t u64;
-		/**<  Allow 8-byte reserved on 32-bit system */
-		void *buf_addr;
-		/**< Virtual address of the pattern to be matched. */
-	};
-	rte_iova_t buf_iova;
-	/**< IOVA address of the pattern to be matched. */
-	uint16_t buf_size; /**< The buf size. */
-};
-
 /**
  * The generic *rte_regex_ops* structure to hold the RegEx attributes
  * for enqueue and dequeue operation.
@@ -1257,7 +1243,7 @@ struct rte_regex_ops {
 	uint32_t resv2;
 
 	/* W2 */
-	struct rte_regex_iov *(*bufs)[];
+	struct rte_mbuf *bufs;
 	/**< Holds a pointer to the buffers list.*/
 
 	/* W3 */

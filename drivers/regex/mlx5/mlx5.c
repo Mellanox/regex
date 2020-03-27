@@ -215,8 +215,8 @@ static void destroy_qp_resources(struct mlx5_regex_qp *qp, uint16_t nb_desc)
 
 	for (i = 0; i < nb_desc; i++) {
 		job = qp->regex_jobs[i];
-		rte_free(BUF_ADDR(&job->resp_iov));
-		rte_free(BUF_ADDR(&job->m_iov));
+		rte_free(job->resp);
+		rte_free(job->meta);
 		rte_free(job);
 	}
 	rte_free(qp->regex_jobs);
@@ -247,34 +247,29 @@ static int setup_qp_resources(struct mlx5_regex_priv *priv,
 			rte_errno = ENOMEM;
 			goto alloc_err;
 		}
-
-		BUF_ADDR(&job->m_iov) = rte_malloc("mlx5 metadata buf",
-						   MLX5_REGEX_METADATA_SIZE, 0);
-		if (!BUF_ADDR(&job->m_iov)) {
+		job->meta = rte_zmalloc("mlx5 metadata buf",
+				        MLX5_REGEX_METADATA_SIZE, 0);
+		if (!job->meta) {
 			rte_free(job);
 			rte_errno = ENOMEM;
 			goto alloc_err;
 		}
-		BUF_SIZE(&job->m_iov) = MLX5_REGEX_METADATA_SIZE;
-
-		BUF_ADDR(&job->resp_iov) = rte_malloc("mlx5 response buf",
-						      MLX5_REGEX_RESPONSE_SIZE,
-						      0);
-		if (!BUF_ADDR(&job->resp_iov)) {
-			rte_free(BUF_ADDR(&job->m_iov));
+		job->resp= rte_zmalloc("mlx5 response buf",
+				       MLX5_REGEX_RESPONSE_SIZE, 0);
+		if (!job->resp) {
+			rte_free(job->meta);
 			rte_free(job);
 			rte_errno = ENOMEM;
 			goto alloc_err;
 		}
-		BUF_SIZE(&job->resp_iov) = MLX5_REGEX_METADATA_SIZE;
 		qp->regex_jobs[i] = job;
 	}
 	return 0;
 alloc_err:
 	while (i--) {
 		job = qp->regex_jobs[i];
-		rte_free(job->resp_iov.buf_addr);
-		rte_free(job->m_iov.buf_addr);
+		rte_free(job->resp);
+		rte_free(job->meta);
 		rte_free(job);
 	}
 	rte_free(qp->regex_jobs);

@@ -2,6 +2,8 @@
  * Copyright 2020 Mellanox Technologies, Ltd
  */
 
+#include <rte_mbuf.h>
+
 #include "mlx5.h"
 #include "mlx5_regex_queue.h"
 #include "mlx5_regex_utils.h"
@@ -57,11 +59,12 @@ tx_burst_msegs_op(struct mlx5_regex_priv *priv, struct mlx5_regex_qp *q,
 
 	if (q->sq.pi - q->sq.ci >= q->sq.num_entries)
 		return EBUSY;
-	nsegs = ops->num_of_bufs;
 	/*
 	 * REGEX dev currently support single segment req buf.
 	 * TODO: UMR to support multiple segments.
 	 */
+	assert(ops->num_of_bufs == 1);
+	nsegs = NB_SEGS(ops->bufs);
 	assert(nsegs == 1);
 	/*
 	 * WQE:
@@ -92,25 +95,25 @@ tx_burst_msegs_op(struct mlx5_regex_priv *priv, struct mlx5_regex_qp *q,
 	mseg = (struct mlx5_wqe_metadata_seg *)((uint8_t*)cseg + sizeof(*cseg));
 	lkey = mlx5_mr_addr2mr_bh(priv->pd, priv->regex_dev.dev_id,
 				  &priv->mr_scache, &q->mr_ctrl,
-				  (uintptr_t)BUF_ADDR(&job->m_iov), 0);
-	mlx5dv_set_data_seg(&tmp_dseg, BUF_SIZE(&job->m_iov),
-			    lkey, (uintptr_t)BUF_ADDR(&job->m_iov));
+				  (uintptr_t) job->meta, 0);
+	mlx5dv_set_data_seg(&tmp_dseg, MLX5_REGEX_METADATA_SIZE, lkey,
+			    (uintptr_t) job->meta);
 	mlx5dv_set_metadata_seg(mseg, regex_cseg.ctrl_subset_id_2_subset_id_3,
 				lkey, tmp_dseg.addr);
 	/* Data segment for nsegs buffer */
 	dseg = (struct mlx5_wqe_data_seg *)((uint8_t*)mseg + sizeof(*mseg));
 	lkey = mlx5_mr_addr2mr_bh(priv->pd, priv->regex_dev.dev_id,
 				  &priv->mr_scache, &q->mr_ctrl,
-				  (uintptr_t)BUF_ADDR((*ops->bufs)[0]), 0);
-	mlx5dv_set_data_seg(dseg, BUF_SIZE((*ops->bufs)[0]),
-			    lkey, (uintptr_t)BUF_ADDR((*ops->bufs)[0]));
+				  rte_pktmbuf_mtod(ops->bufs, uintptr_t), 0);
+	mlx5dv_set_data_seg(dseg, rte_pktmbuf_data_len(ops->bufs),
+			    lkey, rte_pktmbuf_mtod(ops->bufs, uintptr_t));
 	/* Data segment for response buffer */
 	dseg += sizeof(*dseg);
 	lkey = mlx5_mr_addr2mr_bh(priv->pd, priv->regex_dev.dev_id,
 				  &priv->mr_scache, &q->mr_ctrl,
-				  (uintptr_t)BUF_ADDR(&job->resp_iov), 0);
-	mlx5dv_set_data_seg(dseg, BUF_SIZE(&job->resp_iov),
-			    lkey, (uintptr_t)BUF_ADDR(&job->resp_iov));
+				  (uintptr_t) job->resp, 0);
+	mlx5dv_set_data_seg(dseg, MLX5_REGEX_RESPONSE_SIZE, lkey,
+			    (uintptr_t) job->resp);
 	/* Ring doorbell */
 	++q->sq.pi;
 	rte_io_wmb();
@@ -150,13 +153,12 @@ process_queue_resp(struct mlx5_regex_qp *q, struct rte_regex_ops *ops,
 	int i;
 
         job = q->regex_jobs[cqe->wqe_id];
-	match_count = DEVX_GET(regexp_metadata,
-			       (uint8_t *)job->m_iov.buf_addr + 32,
+	match_count = DEVX_GET(regexp_metadata, (uint8_t *)job->meta + 32,
 			       match_count);
 	if (match_count < 0)
 		return EAGAIN;
-	resp_desc = (struct mlx5_regex_resp_desc *)job->m_iov.buf_addr  + 32;
-	matches = (struct mlx5_regex_match_tuple *)job->resp_iov.buf_addr;
+	resp_desc = (struct mlx5_regex_resp_desc *)job->meta  + 32;
+	matches = (struct mlx5_regex_match_tuple *)job->resp;
 	ops->nb_matches = match_count;
 	ops->nb_actual_matches = resp_desc->detected_match_count;
 	ops->user_id = job->user_id;

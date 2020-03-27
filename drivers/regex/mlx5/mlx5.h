@@ -51,8 +51,8 @@ struct mlx5_regex_match_tuple {
 #define MLX5_REGEX_RESPONSE_SIZE	(254 * sizeof(struct mlx5_regex_match_tuple))
 
 struct mlx5_regex_job {
-	struct rte_regex_iov m_iov; /* Buffer for metadata */
-	struct rte_regex_iov resp_iov; /* Buffer to receive response from dev */
+	void *meta; /* Buffer for metadata */
+	void *resp; /* Buffer to receive response from dev */
 	bool in_progress; /* Buffer is in used and not dequeued yet */
 	uint64_t user_id; /* Store req's user_id used this buffer */
 };

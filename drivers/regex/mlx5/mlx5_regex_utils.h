@@ -16,8 +16,7 @@ extern int mlx5_regex_logtype;
 		__VA_ARGS__ PMD_DRV_LOG_STRIP PMD_DRV_LOG_OPAREN, \
 		PMD_DRV_LOG_CPAREN)
 
-/* Convenience macros for accessing rte_regex_iov fields. */
-#define BUF_ADDR(m) ((m)->buf_addr)
-#define BUF_SIZE(m) ((m)->buf_size)
+/* Convenience macros for accessing mbuf fields. */
+#define NB_SEGS(m) ((m)->nb_segs)
 
 #endif /* RTE_PMD_MLX5_REGEX_UTILS_H_ */
