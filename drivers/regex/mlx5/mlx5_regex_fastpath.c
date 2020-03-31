@@ -129,11 +129,12 @@ mlx5_regex_dev_dequeue(struct rte_regex_dev *dev, uint16_t qp_id,
 		cnt--;
 		if (res == NULL)
 			continue;
-		//op->user_id = queue->jobs[res->header.job_id].user_id;
+
+		uint32_t id = DEVX_GET(regexp_metadata, res, job_id);
+		op->user_id = queue->jobs[id].user_id;
 		op->nb_matches = DEVX_GET(regexp_metadata, res, match_count);
 		op->nb_actual_matches = DEVX_GET(regexp_metadata, res,
 						 detected_match_count);
-		
 		for (j = 0; j < op->nb_matches; j++) {
 			offset = sizeof(struct rxp_response_desc) + j * (64/8);
 			op->matches[j].rule_id = DEVX_GET(regexp_match_tuple, 

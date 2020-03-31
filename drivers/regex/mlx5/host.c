@@ -944,7 +944,7 @@ int mlnx_read_resp(struct rxp_queue *rxp_queue, uint8_t *buf, size_t buf_size,
             //      Is regexp_metadata an bug here for mult queue/app!???
             match_count = DEVX_GET(regexp_metadata,
                                 (uint8_t *)rxp_queue->sq_buf[i].metadata_p + 32, match_count);
-
+	    DEVX_SET(regexp_metadata, (uint8_t *)rxp_queue->sq_buf[i].metadata_p + 32, job_id, rxp_queue->sq_buf[i].job_id);
             if (match_count < 0)
             {
                 /*
