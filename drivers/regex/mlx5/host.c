@@ -625,7 +625,7 @@ int mlnx_write_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count __rte_unuse
 {
     unsigned int pending;
     uint32_t block, reg, val, rule_cnt, rule_offset, rtru_max_num_entries;
-    int ret;
+    int ret = 1;
 
     if (rxp_prog_mode == RXP_MODE_NOT_DEFINED)
     {
@@ -735,7 +735,7 @@ int mlnx_write_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count __rte_unuse
                     ret = rxp_flush_rules(&rules->rules[rule_offset], pending,
                                         rxp_eng);
 
-                    if (ret)
+                    if (ret <= 0)
                     {
                         mlnx_log("Error: CP read failed (flush_rules)!");
 			rxp_dump_csrs("CP read failed", rxp_eng);
@@ -758,7 +758,7 @@ int mlnx_write_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count __rte_unuse
                 ret = rxp_flush_rules(&rules->rules[rule_offset], pending,
                                       rxp_eng);
 
-                if (ret)
+                if (ret <= 0)
                 {
                     mlnx_log("Error: CP read failed (flush_rules)!");
                     return ret;
