@@ -534,7 +534,7 @@ static int parse_rof(const char *filename, struct rxp_ctl_rules_pgm **rules)
         return -EINVAL;
     }
 
-    roffile = fopen(filename, "r");
+    roffile = fmemopen(filename, rules_len, "r");
 
     if (!roffile)
     {
@@ -638,7 +638,7 @@ static int parse_rof(const char *filename, struct rxp_ctl_rules_pgm **rules)
  * multiple applications attempting to program RXP's!
  */
 __attribute__ ((visibility ("default")))
-int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile,
+int rxp_program_rules(unsigned rxp __rte_unused, const char *rules,
 		      bool incremental, struct ibv_context *ctx)
 {
     unsigned i;
@@ -675,7 +675,7 @@ int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile,
         return -1;
     }
 
-    ret = parse_rof(rulesfile, &rules);
+    ret = parse_rof(rules, &rules);
     if (ret < 0)
     {
         return ret;

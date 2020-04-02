@@ -59,8 +59,7 @@ typedef int (*regex_dev_rule_db_compile_t)(struct rte_regex_dev *dev);
 /**< @internal Compile and write the rule database for the regex device. */
 
 typedef int (*regex_dev_rule_db_import_t)(struct rte_regex_dev *dev,
-				    	  const char *rule_db,
-					  uint32_t rule_db_len);
+				    	  const char *rule_db);
 /**< @internal Upload a pre created rule database to the regex device. */
 
 typedef int (*regex_dev_rule_db_export_t)(struct rte_regex_dev *dev,
