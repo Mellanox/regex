@@ -933,8 +933,7 @@ rte_regex_rule_db_compile(uint8_t dev_id);
  */
 __rte_experimental
 int
-rte_regex_rule_db_import(uint8_t dev_id, const char *rule_db,
-			 uint32_t rule_db_len);
+rte_regex_rule_db_import(uint8_t dev_id, const char *rule_db);
 
 /**
  * @warning

@@ -107,10 +107,14 @@ main(int argc, char **argv)
 	int ret;
 	int i;
 
+	// do this until we understand how to add options.
+	const char *rules_db_file = argv[1];
+
 	/* Initialise DPDK EAL */
-	ret = rte_eal_init(argc, argv);
-	if (ret < 0)
-		rte_exit(EXIT_FAILURE, "Invalid EAL arguments!\n");
+	ret = rte_eal_init(argc-1, argv+1);
+	if (ret < 0) {
+		rte_exit(EXIT_FAILURE, "Invalid EAL arguments!, usage: dpdk-test-regexdev <rof2 file> [dpdk options]\n");
+	}
 
 	force_quit = 0;
 	if (0) {signal(SIGINT, signal_handler);
@@ -125,6 +129,8 @@ main(int argc, char **argv)
 		if (ret)
 			break;
 	}
+
+	rte_regex_rule_db_import(i, rules_db_file);
 	main_loop();
 	return ret;
 }

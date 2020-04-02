@@ -263,8 +263,7 @@ rte_regex_rule_db_compile(uint8_t dev_id)
 }
 
 int
-rte_regex_rule_db_import(uint8_t dev_id, const char *rule_db,
-			 uint32_t rule_db_len)
+rte_regex_rule_db_import(uint8_t dev_id, const char *rule_db)
 {
 	if (dev_id >= RTE_MAX_REGEXDEV_DEVS)
 		return -EINVAL;
@@ -275,7 +274,7 @@ rte_regex_rule_db_import(uint8_t dev_id, const char *rule_db,
 	if (regex_devices[dev_id]->dev_ops->dev_db_import == NULL)
 		return -ENOTSUP;
 	return regex_devices[dev_id]->dev_ops->dev_db_import
-		(regex_devices[dev_id], rule_db, rule_db_len);
+		(regex_devices[dev_id], rule_db);
 }
 
 int
