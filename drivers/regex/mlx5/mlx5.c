@@ -265,7 +265,17 @@ error:
 	return -rte_errno;
 }
 
+static int mlx5_regex_dev_rules_db_import(struct rte_regex_dev *dev, const char *rule_db_file) {
+	struct mlx5_regex_priv *priv = (struct mlx5_regex_priv *)dev;
+	if (rxp_program_rules(0, rule_db_file, false, priv->ctx) < 0) {
+		    DRV_LOG(ERR, "Error: rxp_program_rules() failed");
+        	exit(-1);
+    	}
+	return 0;
+}
+
 static const struct rte_regex_dev_ops dev_ops = {
+	.dev_db_import = mlx5_regex_dev_rules_db_import,
 	.dev_info_get = mlx5_regex_dev_info_get,
 	.dev_configure = mlx5_regex_dev_configure,
 };
@@ -360,11 +370,6 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	pthread_mutex_lock(&priv_list_lock);
 	TAILQ_INSERT_TAIL(&priv_list, priv, next);
 	pthread_mutex_unlock(&priv_list_lock);
-	if (rxp_program_rules(0, "/.autodirect/mtrswgwork/orika/pegasus04_share/dpdk.org/app/test-regexdev/synthetic_internal.rof2", false, priv->ctx) < 0) {
- 	
-		DRV_LOG(ERR, "Error: rxp_program_rules() failed");
-        	exit(-1);
-    	}
 
 	ret = rte_regex_dev_register(&priv->regex_dev);
 	if (ret < 0) {
