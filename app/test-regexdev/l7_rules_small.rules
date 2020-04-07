@@ -1,0 +1,102 @@
+@SSID
+subset_id = 1
+#NAME: audiogalaxy
+1,^(\x45\x5f\xd0\xd5|\x45\x5f.*0.60(6|8)W)
+#NAME: http-dap
+2,User-Agent: DA [678]\.[0-9]
+#NAME: http-freshdownload
+3,User-Agent: FreshDownload\/[456](\.[0-9][0-9]?)?
+#NAME: http-itunes
+4,http\/(0\.9|1\.0|1\.1).*(user-agent: itunes)
+#NAME: httpaudio
+5,http\/(0\.9|1\.0|1\.1)[\x09-\x0d ][1-5][0-9][0-9][\x09-\x0d -~]*(content-type: audio)
+#NAME: httpcachehit
+6,http\/(0\.9|1\.0|1\.1)[\x09-\x0d ][1-5][0-9][0-9][\x09-\x0d -~]*(x-cache: hit)
+#NAME: httpcachemiss
+7,http\/(0\.9|1\.0|1\.1)[\x09-\x0d ][1-5][0-9][0-9][\x09-\x0d -~]*(x-cache: miss)
+#NAME: httpvideo
+8,http\/(0\.9|1\.0|1\.1)[\x09-\x0d ][1-5][0-9][0-9][\x09-\x0d -~]*(content-type: video)
+#NAME: pressplay
+9,user-agent: nsplayer
+#NAME: quicktime
+10,user-agent: quicktime \(qtver=[0-9].[0-9].[0-9];os=[\x09-\x0d -~]+\)\x0d\x0a
+#NAME: snmp-mon
+11,^\x02\x01\x04.+[\xa0-\xa3]\x02[\x01-\x04].?.?.?.?\x02\x01.?\x02\x01.?\x30
+#NAME: snmp-trap
+12,^\x02\x01\x04.+\xa4\x06.+\x40\x04.?.?.?.?\x02\x01.?\x02\x01.?\x43
+#NAME: exe
+13,\x4d\x5a(\x90\x03|\x50\x02)\x04
+#NAME: flash
+14,[FC]WS[\x01-\x09]|FLV\x01\x05\x09
+#NAME: gif
+15,GIF8(7|9)a
+#NAME: html
+16,<html.*><head>
+#NAME: jpeg
+17,\xff\xd8
+#NAME: mp3
+18,\x49\x44\x33\x03
+#NAME: ogg
+19,oggs.?.?.?.?.?.?.?.?.?.?.?.?.?.?.?.?.?.?.?.?.?.?.?.?\x01vorbis
+#NAME: pdf
+20,%PDF-1\.[0123456]
+#NAME: perl
+21,\#! ?\/(usr\/(local\/)?)?bin\/perl
+#NAME: png
+22,\x89PNG\x0d\x0a\x1a\x0a
+#NAME: postscript
+23,%!ps
+#NAME: rar
+24,rar\x21\x1a\x07
+#NAME: rpm
+25,\xed\xab\xee\xdb.?.?.?.?[1-7]
+#NAME: rtf
+26,\{\\rtf[12]
+#NAME: tar
+27,ustar
+#NAME: zip
+28,pk\x03\x04\x14
+#NAME: code_red
+29,\/default\.ida\?NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN%u9090%u6858%ucbd3%u7801%u9090%u6858%ucbd3%u7801%u9090%u6858%ucbd3%u7801%u9090%u9090%u8190%u00c3%u0003%u8b00%u531b%u53ff%u0078%u0000%u00=a
+#NAME: nimda
+30,GET (\/scripts\/root\.exe\?\/c\+dir|\/MSADC\/root\.exe\?\/c\+dir|\/c\/winnt\/system32\/cmd\.exe\?\/c\+dir|\/d\/winnt\/system32\/cmd\.exe\?\/c\+dir|\/scripts\/\.\.%5c\.\.\/winnt\/system32\/cmd\.exe\?\/c\+dir|\/_vti_bin\/\.\.%5c\.\.\/\.\.%5c\.\.\/\.\.%5c\.\.\/winnt\/system32\/cmd\.exe\?\/c\+dir|\/_mem_bin\/\.\.%5c\.\.\/\.\.%5c\.\.\/\.\.%5c\.\.\/winnt\/system32\/cmd\.exe\?\/c\+dir|\/msadc\/\.\.%5c\.\.\/\.\.%5c\.\.\/\.\.%5c\/\.\.\xc1\x1c\.\.\/\.\.\xc1\x1c\.\.\/\.\.\xc1\x1c\.\.\/winnt\/system32\/cmd\.exe\?\/c\+dir|\/scripts\/\.\.\xc1\x1c\.\.\/winnt\/system32\/cmd\.exe\?\/c\+dir|\/scripts\/\.\.\xc0\/\.\.\/winnt\/system32\/cmd\.exe\?\/c\+dir|\/scripts\/\.\.\xc0\xaf\.\.\/winnt\/system32\/cmd\.exe\?\/c\+dir|\/scripts\/\.\.\xc1\x9c\.\.\/winnt\/system32\/cmd\.exe\?\/c\+dir|\/scripts\/\.\.%35c\.\.\/winnt\/system32\/cmd\.exe\?\/c\+dir|\/scripts\/\.\.%35c\.\.\/winnt\/system32\/cmd\.exe\?\/c\+dir|\/scripts\/\.\.%5c\.\.\/winnt\/system32\/cmd\.exe\?\/c\+dir|\/scripts\/\.\.%2f\.\.\/winnt\/system32\/cmd\.exe\?\/c\+dir)
+#NAME: 100bao
+31,^\x01\x01\x05\x0a
+#NAME: aim
+32,^(\*[\x01\x02].*\x03\x0b|\*\x01.?.?.?.?\x01)|flapon|toc_signon.*0x
+#NAME: aimwebcontent
+33,user-agent:aim\/
+#NAME: applejuice
+34,^ajprot\x0d\x0a
+#NAME: ares
+35,^\x03[]Z].?.?\x05$
+#NAME: armagetron
+36,YCLC_E|CYEL
+#NAME: battlefield1942
+37,^\x01\x11\x10\|\xf8\x02\x10\x40\x06
+#NAME: battlefield2
+38,^(\x11\x20\x01...?\x11|\xfe\xfd.?.?.?.?.?.?(\x14\x01\x06|\xff\xff\xff))|[]\x01].?battlefield2
+#NAME: battlefield2142
+39,^(\x11\x20\x01\x90\x50\x64\x10|\xfe\xfd.?.?.?\x18|[\x01\\].?battlefield2)
+#NAME: bgp
+40,^\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff..?\x01[\x03\x04]
+#NAME: biff
+41,^[a-z][a-z0-9]+@[1-9][0-9]+$
+#NAME: bittorrent
+42,^(\x13bittorrent protocol|azver\x01$|get \/scrape\?info_hash=get \/announce\?info_hash=|get \/client\/bitcomet\/|GET \/data\?fid=)|d1:ad2:id20:|\x08'7P\)[RP]
+#NAME: chikka
+43,^CTPv1\.[123] Kamusta.*\x0d\x0a$
+#NAME: cimd
+44,\x02[0-4][0-9]:[0-9]+.*\x03
+#NAME: ciscovpn
+45,^\x01\xf4\x01\xf4
+#NAME: citrix
+46,\x32\x26\x85\x92\x58
+#NAME: counterstrike-source
+47,^\xff\xff\xff\xff.*cstrikeCounter-Strike
+#NAME: cvs
+48,^BEGIN (AUTH|VERIFICATION|GSSAPI) REQUEST\x0a
+#NAME: dayofdefeat-source
+49,^\xff\xff\xff\xff.*dodDay of Defeat
+#NAME: dhcp
+50,^[\x01\x02][\x01- ]\x06.*c\x82sc
