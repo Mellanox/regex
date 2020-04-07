@@ -21,26 +21,25 @@ struct sw_job {
 	struct rte_regex_iov (*iov[1]);
 };
 static void
-main_loop(void)
+main_loop(const char *match_str )
 {
 	struct rte_regex_ops *ops[TOTAL_JOBS];
 	char buf[STRING_LEN];
 	int i;
 
 	for (i = 0; i < STRING_LEN; i++)
-		buf[i] = '.';
+		buf[i] = 0;
 	buf[STRING_LEN-1] = 0;	
-	const char *match_str = "hello world";
 	for (i = 0; i < 10; i++) {
 		int offset = rand()%(STRING_LEN - 50);
 		strncpy(buf + offset, match_str, strlen(match_str));
 	}
-
+	
 	sprintf(buf + STRING_LEN -strlen(match_str)-1, "%s", match_str);
 	
 	struct sw_job sw_jobs[TOTAL_JOBS];
 
-	//printf("Posting %d random jobs on buffer %s \n", TOTAL_JOBS, buf);
+	printf("Posting %d random jobs on buffer %s \n", TOTAL_JOBS, buf);
 	for (i = 0; i < TOTAL_JOBS; i++) {
 		ops[i] = rte_malloc(NULL, sizeof(*ops[0]), 0);
    	        sw_jobs[i].iov[0] = rte_malloc(NULL, sizeof(* sw_jobs[i].iov[0]), 0);
@@ -109,11 +108,12 @@ main(int argc, char **argv)
 
 	// do this until we understand how to add options.
 	const char *rules_db_file = argv[1];
+	const char *match_str = argv[2];
 
 	/* Initialise DPDK EAL */
-	ret = rte_eal_init(argc-1, argv+1);
+	ret = rte_eal_init(argc-2, argv+2);
 	if (ret < 0) {
-		rte_exit(EXIT_FAILURE, "Invalid EAL arguments!, usage: dpdk-test-regexdev <rof2 file> [dpdk options]\n");
+		rte_exit(EXIT_FAILURE, "Invalid EAL arguments!, usage: dpdk-test-regexdev <rof2 file> <string to match> [dpdk options]\n");
 	}
 
 	force_quit = 0;
@@ -130,7 +130,13 @@ main(int argc, char **argv)
 			break;
 	}
 
-	rte_regex_rule_db_import(i, rules_db_file);
-	main_loop();
+	ret = rte_regex_rule_db_import(0, rules_db_file);
+	if (ret) {
+		printf("Failed to set rules db for dev %d", 0);
+		return ret;
+	}
+	main_loop(match_str);
+	//Currently causing segfault
+	//rte_regex_dev_stop(0);
 	return ret;
 }

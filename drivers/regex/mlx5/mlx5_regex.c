@@ -476,7 +476,7 @@ int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sqid)
 	struct mlx5_cqe64 *cqe;
 	size_t next_cqe_offset;
 
-	printf("Before Poll cqe 0x%x for qp 0x%x:\n", sq->cq.cqn, sq->qpn);
+	//printf("Before Poll cqe 0x%x for qp 0x%x:\n", sq->cq.cqn, sq->qpn);
 	next_cqe_offset =  sq->cq.ci % SQ_SIZE * sizeof(*cqe);
 	cqe = (struct mlx5_cqe64 *)((uint8_t*)sq->cq.cq_buff + next_cqe_offset);
 	int retry = 1600000;
@@ -497,7 +497,7 @@ int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sqid)
 		       mlx5dv_get_cqe_opcode(cqe), be32toh(cqe->byte_cnt));
 		return -1;
 	}
-	printf("After Poll cqe 0x%x for qp 0x%x:\n", sq->cq.cqn, sq->qpn);
+	//printf("After Poll cqe 0x%x for qp 0x%x:\n", sq->cq.cqn, sq->qpn);
 	//print_raw(cqe, 1);	
 	return 1;
 }
