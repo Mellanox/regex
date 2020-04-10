@@ -274,10 +274,24 @@ static int mlx5_regex_dev_rules_db_import(struct rte_regex_dev *dev, const char 
 	return 0;
 }
 
+static int
+mlx5_regex_dev_stop(struct rte_regex_dev *dev __rte_unused) {
+        struct mlx5_regex_priv *priv = container_of(dev,
+                                                    struct mlx5_regex_priv,
+                                                    regex_dev);
+    int i;
+
+    for (i = 0; i < priv->nb_queues; i++) {
+        rxp_close(priv->queues[i].handle);
+    }
+    return 0;
+}
+
 static const struct rte_regex_dev_ops dev_ops = {
 	.dev_db_import = mlx5_regex_dev_rules_db_import,
 	.dev_info_get = mlx5_regex_dev_info_get,
 	.dev_configure = mlx5_regex_dev_configure,
+ 	.dev_stop = mlx5_regex_dev_stop,
 };
 
 /**
