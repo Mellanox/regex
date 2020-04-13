@@ -1042,7 +1042,6 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
 
     if (job_count == 0)
     {
-	printf(" job cnt = 0");
         return -1;
     }
 
@@ -1052,19 +1051,15 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
         if (num_jobs_processed >= job_count)
         {
             /* Exit as no more jobs to send */
-//	    printf(" Exit as no more jobs to send");
-	  
             break;
         }
 
         if ((rxp_queue->sq_buf[i].sq_busy == RXP_SQ_NOT_BUSY) &&
                 (rxp_queue->sq_buf[i].sq_resp_ready != true))
         {
-            /* Must have an empty buffer to store new job...{YEH} */
-            /* Copy data into local buffer ready to send to RXP  */
             /*
-             * Mellanox will be taking care of the Padding/Alignment
-             * of jobs for RXP FIFOs
+             * Must have an empty buffer to store new job.
+             * Copy data into local buffer ready to send to RXP
              */
 
             /*
@@ -1075,24 +1070,31 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
             job = (struct rxp_job_desc *)(data[num_jobs_processed * 2].data_ptr);
             joblen = data[num_jobs_processed * 2 + 1].len;
 
-            //TODO: For Yuval: I still dont know 100% how you want me to
-            //      figure this control field out! (If actually only 1bit,
-            //      then I can change!)
             tmp_ctrl  = job->ctrl & 0x000C; //Get 1st 2 bits needed from Ctrl
             tmp_ctrl |= job->ctrl & 0x0100; //8th bit needed
 
             /*
-             * TODO: (NOTE) As not sure how Mlnx is handling the JOBID's I'm
+             * NOTE As not sure how Mlnx is handling the JOBID's I'm
              * going to store each JobId locally to each SQ for later
              * retrieval/mapping in response
              */
             rxp_queue->sq_buf[i].job_id = job->job_id;
 
+            /* Check job data validity */
+            if(joblen == 0)
+            {
+                /* Error job data len cannot be 0 */
+                if (debug_enabled)
+                {
+                    mlnx_log("mlnx_submit_job: Error job length = 0!");
+                }
+                return -1;
+            }
+
             /*
              * Note: joblen taken from input data seg and ctrl field mapped
              *       above.  JobId not used in Mlnx API so stored above.
              */
-            //TODO: NOTE:  consider Endiness as doing memcpy instead of DEVX...?
             mlx5_regex_set_ctrl_seg(&rxp_queue->sq_buf[i].ctrl_seg, 0,
                                     job->subset, tmp_ctrl);
 
@@ -1117,7 +1119,6 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
 				(uintptr_t)rxp_queue->sq_buf[i].metadata_p);
 
             /* Return work_id, or -1 in case of err */
-//	    printf("Send work qp=0x%x\n",i);
             rxp_queue->sq_buf[i].work_id = mlx5_regex_send_work(
                                 rxp_queue->rxp_job_ctx,
                                 &rxp_queue->sq_buf[i].ctrl_seg,
@@ -1145,8 +1146,6 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
             else
             {
                 /* Error with Job transmission */
-                //TODO: How best to cope with this error? Maybe dont exit,
-                //      simply return number of jobs sent!!!!
                 if (debug_enabled)
                 {
                     mlnx_log("mlnx_submit_job: Failed to send job [%d]!", i);
@@ -1154,6 +1153,12 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
                 break;
             }
         }
+    }
+
+    if (debug_csrs)
+    {
+        rxp_dump_csrs("Job Submit (ENG0): ", 0);
+        rxp_dump_csrs("Job Submit (ENG1): ", 1);
     }
 
     if (debug_enabled)
@@ -1464,8 +1469,9 @@ int mlnx_release(struct rxp_queue *queue)
         /* Note in this system there are 2 RXP Engines to shutdown! */
         rxp_disable(0);
         rxp_disable(1);
-        mlnx_close(queue->rxp);
+//        mlnx_close(queue->rxp); //TODO this needs properly managed
     }
+
     pthread_mutex_unlock(&(queue->rxp->lock));
 
     if (queue->rxp->open_queues == 0)
@@ -1484,17 +1490,19 @@ int mlnx_release(struct rxp_queue *queue)
  */
 int mlnx_close(struct rxp_mlnx_dev *rxp)
 {
-    unsigned int i;
+//    unsigned int i;
 
+#if 0
     for (i = 0; i < (MAX_RXP_ENGINES + RXP_SHADOW_EM_COUNT); i++)
     {
         munmap(rxp->rxp_db_desc[i].database_ptr, MAX_DB_SIZE);
         mlx5dv_devx_umem_dereg(rxp->rxp_db_desc[i].db_umem);
     }
+#endif
 
     //mlx5_free_context(rxp->device_ctx); //No longer in Mlnx API try:
-    free(rxp->device_ctx); //TODO check if this is right
-    ibv_free_device_list(rxp->dev_list);
+    free(rxp->device_ctx); //TODO check if this is right - Need to clean up somewhere?
+//    ibv_free_device_list(rxp->dev_list); //TODO removed as initial setup stripped out previously!
 
     return 1;
 }
@@ -1736,7 +1744,7 @@ tidyup_context:
     //free(rxp.device_ctx); //TODO check if this is right 
     //TODO Need to free device_ctx! Get updates from Yuval...
 tidyup:
-    ibv_free_device_list(rxp.dev_list);
+    //ibv_free_device_list(rxp.dev_list); //TODO removed as stirpped out previously!
     pthread_mutex_destroy(&(rxp.lock));
     //free(rxp);
 
