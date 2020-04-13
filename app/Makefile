@@ -30,4 +30,6 @@ endif
 
 DIRS-$(CONFIG_RTE_LIBRTE_REGEXDEV) += test-regexdev
 
+DIRS-$(CONFIG_RTE_LIBRTE_REGEXDEV_HRA_LITE) += test-regexdev-hra-lite
+
 include $(RTE_SDK)/mk/rte.subdir.mk
