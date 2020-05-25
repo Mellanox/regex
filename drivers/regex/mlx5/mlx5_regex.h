@@ -5,16 +5,21 @@
 #ifndef MLX5_REGEX_H
 #define MLX5_REGEX_H
 
-#include "mlx5.h"
 #include <mlx5_devx_cmds.h>
 #include <mlx5_prm.h>
-void print_raw(void*, size_t cnt);
+void print_raw(volatile uint8_t*, size_t cnt);
 
 //#define REGEX_MLX5_NO_REAL_HW 1
-
+#define LOG_SQ_SIZE 4
+#define SQ_SIZE (1<<LOG_SQ_SIZE)
 struct mlx5_regex_wqe_ctrl_seg {
        __be32 le_subset_id_0_subset_id_1;
        __be32 ctrl_subset_id_2_subset_id_3;
+};
+
+struct mlx5_database_ctx {
+	uint32_t umem_id;
+	uint64_t offset;
 };
 
 // This function should be used in order to pack the segment correctly
@@ -95,13 +100,15 @@ int mlx5_regex_engine_resume(struct ibv_context *ctx, int engine_id);
  * Completions will return in order per sq.
  * This call is thread safe per SQ.
  */
-int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx,
+int mlx5_regex_prep_work(struct mlx5_regex_ctx *ctx,
 			 struct mlx5_regex_wqe_ctrl_seg *seg,
-			 uint8_t* metadata_p,  uint32_t lkey,
+			 volatile uint8_t* metadata_p,  uint32_t lkey,
 			 struct mlx5_wqe_data_seg *input,
 			 struct mlx5_wqe_data_seg *output,
-			 unsigned int sq);
+			 unsigned int sq, int req_cqe);
 
+
+int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx, unsigned int sq);
 /*
  * Send NOP on WQE, will do nothing.
  */

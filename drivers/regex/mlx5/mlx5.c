@@ -32,7 +32,7 @@ struct mlx5_regex_db {
 	void *raw_mem;
 	struct mlx5dv_devx_umem *umem;
 	/* TODO: refer to Yuval's struct mlx5_database_ctx */
-	struct mlx5_database_ctx umem_ctx;
+//	struct mlx5_database_ctx umem_ctx;
 };
 
 #define MLX5_REGEX_MAX_RXP_ENGINES 2
@@ -209,6 +209,47 @@ static int mlx5_regex_dev_info_get(struct rte_regex_dev *dev __rte_unused,
 	return 0;
 }
 
+static int
+setup_fastpath(struct mlx5_regex_priv *priv, uint32_t q_id)
+{
+	struct mlx5_regex_queues *q = &priv->queues[q_id];
+	int i;
+
+	q->ctx = mlx5_regex_device_open(priv->ctx, MLX5_REGEX_NUM_SQS);
+
+	q->metadata.ptr = rte_calloc(__func__, MLX5_REGEX_MAX_JOBS,
+								 MLX5_REGEX_METADATA_SIZE,
+								 MLX5_REGEX_METADATA_SIZE);
+	q->metadata.buff = mlx5_regex_reg_buffer(q->ctx, q->metadata.ptr, MLX5_REGEX_METADATA_SIZE*MLX5_REGEX_MAX_JOBS);
+
+	q->inputs.ptr = rte_calloc(__func__, MLX5_REGEX_MAX_JOBS,
+							   MLX5_REGEX_MAX_INPUT_OUTPUT,
+							   MLX5_REGEX_MAX_INPUT_OUTPUT);
+	q->inputs.buff = mlx5_regex_reg_buffer(q->ctx, q->inputs.ptr, MLX5_REGEX_MAX_INPUT_OUTPUT*MLX5_REGEX_MAX_JOBS);
+
+	q->outputs.ptr = rte_calloc(__func__, MLX5_REGEX_MAX_JOBS,
+								MLX5_REGEX_MAX_INPUT_OUTPUT,
+								MLX5_REGEX_MAX_INPUT_OUTPUT);
+	q->outputs.buff = mlx5_regex_reg_buffer(q->ctx, q->outputs.ptr, MLX5_REGEX_MAX_INPUT_OUTPUT*MLX5_REGEX_MAX_JOBS);
+
+	q->job_cnt = 0;
+
+	for (i = 0; i < MLX5_REGEX_MAX_JOBS; i++) {
+		q->jobs[i].input = (uint8_t*)q->inputs.ptr + mlx5_regex_buffer_offset_get(i);
+		q->jobs[i].output = (uint8_t*)q->outputs.ptr + mlx5_regex_buffer_offset_get(i);
+		q->jobs[i].metadata = (uint8_t*)q->metadata.ptr + mlx5_regex_metadata_offset_get(i);
+
+		mlx5dv_set_data_seg(&q->jobs[i].metadata_seg, MLX5_REGEX_METADATA_SIZE,
+			    		    mlx5_regex_get_lkey(q->metadata.buff),
+							(uintptr_t)q->jobs[i].metadata);
+		
+		mlx5dv_set_data_seg(&q->jobs[i].output_seg, 0x1000,
+			    		    mlx5_regex_get_lkey(q->outputs.buff),
+							(uintptr_t)q->jobs[i].output);
+	}
+	return 0;	
+}
+
 /**
  * DPDK callback to configure the device.
  *
@@ -240,6 +281,8 @@ mlx5_regex_dev_configure(struct rte_regex_dev *dev __rte_unused,
 	}
 	priv->nb_queues = cfg->nb_queue_pairs;
 	for (i = 0; i < priv->nb_queues; i++) {
+		printf("Setting fast path. for queue %d\n", i);
+		setup_fastpath(priv, i);
 		priv->queues[i].handle = rxp_open(0, priv->ctx);
 		if (priv->queues[i].handle < 0) {
 			DRV_LOG(ERR, "can't open a queue");
@@ -350,6 +393,7 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 			rte_errno = ENOTSUP;
 			return -rte_errno;
 		}
+		DRV_LOG(ERR, "Num engines %d", attr.regexp_num_of_engines);
 #else
 		attr.regexp_num_of_engines = 0;
 #endif

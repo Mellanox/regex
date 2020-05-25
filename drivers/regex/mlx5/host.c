@@ -328,8 +328,8 @@ static int rxp_init_rtru(uint8_t rxp_eng, uint32_t init_bits)
         return ret;
     }
 
-    mlnx_log("Info: Rule Memory took %d cycles to initialise: 0x%08X",
-             ret, poll_value);
+//    mlnx_log("Info: Rule Memory took %d cycles to initialise: 0x%08X",
+//             ret, poll_value);
 
     /* Clear the init bit in the rtru ctrl CSR */
     ctrl_value &= ~(RXP_RTRU_CSR_CTRL_INIT);
@@ -363,7 +363,7 @@ static int rxp_write_rules_via_cp(struct rxp_rof_entry *rules,
 		return -1;
 	}
     }
-    mlnx_log("Written %d rules", count);
+//    mlnx_log("Written %d rules", count);
     return 0;
 }
 
@@ -402,8 +402,8 @@ static int rxp_flush_rules(struct rxp_rof_entry *rules,
         return ret;
     }
 
-    mlnx_log("Info: RTRU FIFO depth: 0x%x", fifo_depth);
-    mlnx_log("Info: Rules flush took %d cycles.", ret);
+//    mlnx_log("Info: RTRU FIFO depth: 0x%x", fifo_depth);
+//    mlnx_log("Info: Rules flush took %d cycles.", ret);
 
     if ((ret = mlx5_regex_register_read(rxp.device_ctx, rxp_eng,
             RXP_RTRU_CSR_CTRL, &val)))
@@ -429,7 +429,7 @@ static int rxp_flush_rules(struct rxp_rof_entry *rules,
         return ret;
     }
 
-    mlnx_log("Info: Rules update took %d cycles", ret);
+//    mlnx_log("Info: Rules update took %d cycles", ret);
 
     if (mlx5_regex_register_read(rxp.device_ctx, rxp_eng,
             RXP_RTRU_CSR_CTRL, &val))
@@ -1119,12 +1119,12 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
 				(uintptr_t)rxp_queue->sq_buf[i].metadata_p);
 
             /* Return work_id, or -1 in case of err */
-            rxp_queue->sq_buf[i].work_id = mlx5_regex_send_work(
+            rxp_queue->sq_buf[i].work_id = mlx5_regex_prep_work(
                                 rxp_queue->rxp_job_ctx,
                                 &rxp_queue->sq_buf[i].ctrl_seg,
                                 rxp_queue->sq_buf[i].metadata_p,  mlx5_regex_get_lkey(rxp_queue->sq_buf[i].metadata_buff),
 				&rxp_queue->sq_buf[i].input_seg,
-                                &rxp_queue->sq_buf[i].output_seg, i);
+                                &rxp_queue->sq_buf[i].output_seg, i%NUM_SQS, 1);
 
 		
 		/*printf("Metadata\n");
@@ -1257,12 +1257,13 @@ early_exit:
  * of order RXP response.  This function allows create X number of SQ memory
  * ptr buffers for each SQ.
  */
-int mlnx_open(struct rxp_queue *queue)
+int mlnx_open(__rte_unused struct rxp_queue *queue)
 {
-    unsigned int q, i, j;
+//    unsigned int q, i, j;
 
+    unsigned int q = 0;
     pthread_mutex_lock(&(rxp.lock));
-
+#if 0
     /* Only allow as many clients as queues */
     if (rxp.open_queues >= RXP_NUM_QUEUES)
     {
@@ -1370,7 +1371,7 @@ int mlnx_open(struct rxp_queue *queue)
         queue[q].sq_buf[i].job_id = 0; //JOBID should never equal 0!
 
     }
-
+#endif
     if (rxp.open_queues++ == 0)
     {
         /* Enable RXP processing if were the first open */
@@ -1387,7 +1388,7 @@ int mlnx_open(struct rxp_queue *queue)
     pthread_mutex_unlock(&(rxp.lock));
 
     return q;
-
+#if 0
 tidyup_regex_ctx:
     for (j = 0; j < i; j++)
     {
@@ -1428,14 +1429,14 @@ tidyup_regex_ctx:
 tidyup:
     rxp.queues_active &= ~(1 << q);
     pthread_mutex_unlock(&(rxp.lock));
-
+#endif
     return -1;
 }
 
 
 int mlnx_release(struct rxp_queue *queue)
 {
-    int j;
+    //int j;
 
     /* Ensure all commands are flushed */
     //TODO check that all jobs/responses flushed!!???
@@ -1445,8 +1446,8 @@ int mlnx_release(struct rxp_queue *queue)
         rxp_dump_csrs("Mlnx_Release", 0);
         rxp_dump_csrs("Mlnx_Release", 1);
     }
-
-    for (j = 0; j < NUM_SQS; j++)
+#if 0
+    for (j = 0; j < MAX_JOBS; j++)
     {
         free(queue->sq_buf[j].input_p);
         free(queue->sq_buf[j].output_p);
@@ -1456,13 +1457,14 @@ int mlnx_release(struct rxp_queue *queue)
         //mlx5dv_devx_umem_dereg(queue->sq_buf[j].output_umem);
         //mlx5dv_devx_umem_dereg(queue->sq_buf[j].metadata_umem);
     }
-
+#endif
     pthread_mutex_lock(&(queue->rxp->lock));
     queue->rxp->queues_active &= ~(1 << queue->q_id);
 
     /* Release this regex context */
     mlx5_regex_device_close(queue->rxp_job_ctx);
 
+    printf("queue->rxp->open_queues = %d\n", queue->rxp->open_queues);
     if (--queue->rxp->open_queues == 0)
     {
         /* Disable RXP processing if were the last close */
@@ -1510,8 +1512,10 @@ int mlnx_close(struct rxp_mlnx_dev *rxp)
 /* mlnx_resume_rxp: This function is used to Resume RXP engine */
 int mlnx_resume_rxp(uint8_t rxp_eng)
 {
-    mlx5_regex_engine_resume(rxp.device_ctx, rxp_eng);
-
+    int ret = mlx5_regex_engine_resume(rxp.device_ctx, rxp_eng);
+    if (ret < 0) {
+        printf("Engine resume error \n");
+    }
     return 1;
 }
 
@@ -1521,9 +1525,9 @@ int mlnx_set_database(uint8_t rxp_eng, uint8_t db_to_use)
      * Stop RXP before doing any programming. Command will return when RXP
      * engine is idle.
      */
-	return 1;
+	
     mlx5_regex_engine_stop(rxp.device_ctx, rxp_eng);
-
+return 1;
     rxp.rxp_db_desc[db_to_use].db_ctx.umem_id =
                                     rxp.rxp_db_desc[db_to_use].db_umem->umem_id;
     rxp.rxp_db_desc[db_to_use].db_ctx.offset = 0,

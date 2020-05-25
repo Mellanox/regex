@@ -470,7 +470,6 @@ int rxp_open(unsigned rxp __rte_unused, struct ibv_context *ctx)
             return ret;
         }
     }
-
     rxp_handle = mlnx_open(queue);
 
     if (rxp_handle < 0)
@@ -628,7 +627,6 @@ static int parse_rof(const char *filename, struct rxp_ctl_rules_pgm **rules)
 }
 
 
-
 //TODO: Need to consider making this thread safe, as multiple application
 //      for Mlnx will be attempting to call this!
 
@@ -678,6 +676,7 @@ int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile,
     ret = parse_rof(rulesfile, &rules);
     if (ret < 0)
     {
+		printf("parsing failed\n");
         return ret;
     }
 

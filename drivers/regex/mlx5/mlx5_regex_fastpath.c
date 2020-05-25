@@ -22,6 +22,7 @@
 #include "rxp-csrs.h"
 #include "rxp-api.h"
 
+#define MLX5_REGEX_RESP_SZ 8
 /**
  * DPDK callback for enqueue.
  *
@@ -37,6 +38,7 @@
  * @return
  *   Number of packets successfully enqueued (<= pkts_n).
  */
+
 int
 mlx5_regex_dev_enqueue(struct rte_regex_dev *dev, uint16_t qp_id,
 		       struct rte_regex_ops **ops, uint16_t nb_ops)
@@ -47,22 +49,52 @@ mlx5_regex_dev_enqueue(struct rte_regex_dev *dev, uint16_t qp_id,
 	struct mlx5_regex_queues *queue = &priv->queues[qp_id];
  	int i;
 	struct rte_regex_ops *op; 
-	int sent = 0, ret = 0;
-
-//	printf(" pi = %d, ci = %d\n",  queue->pi, queue->ci);
+	int sent = 0;
+	struct mlx5_regex_job *job;
+	uint16_t subset[4];
+	uint32_t job_id;
+	int work_id;
+	//printf(" pi = %d, ci = %d\n",  queue->pi, queue->ci);
 	for (i = 0; i < nb_ops; i++) {
-		if ((queue->pi - queue->ci) >= MLX5_REGEX_MAX_JOBS)
+		if (unlikely((queue->pi - queue->ci) >= MLX5_REGEX_MAX_JOBS))
 			return sent;
 		op = ops[i];
-		ret = rxp_submit_job(queue->handle,
-			       queue->pi % MLX5_REGEX_MAX_JOBS,
-			       (*op->bufs)[0]->buf_addr,
-			       (*op->bufs)[0]->buf_size,
-			       op->group_id0, op->group_id1, op->group_id2,
-			       op->group_id3, false, false);
-		if (ret) {
-			printf("submit job failed err = %d\n", ret);
+		job_id = (queue->pi)%MLX5_REGEX_MAX_JOBS;
+		job = &queue->jobs[job_id];
+
+		memcpy(job->input,
+			    (*op->bufs)[0]->buf_addr,
+			    (*op->bufs)[0]->buf_size);
+
+		subset[0] = op->group_id0;
+		subset[1] = op->group_id1;
+		subset[2] = op->group_id2;
+		subset[3] = op->group_id3;
+
+		mlx5_regex_set_ctrl_seg(&job->regex_ctrl, 0,
+                                subset, 0);
+
+		mlx5dv_set_data_seg(&job->input_seg, (*op->bufs)[0]->buf_size,
+			    		    mlx5_regex_get_lkey(queue->inputs.buff),
+							(uintptr_t)job->input);
+
+		work_id =
+		mlx5_regex_prep_work(queue->ctx, &job->regex_ctrl,
+				 (volatile uint8_t*)job->metadata,
+				 mlx5_regex_get_lkey(queue->metadata.buff),
+				 &job->input_seg,
+                	         &job->output_seg,
+				 mlx5_regex_job2queue(job_id), 1);
+		mlx5_regex_send_work(queue->ctx, mlx5_regex_job2queue(job_id));
+
+		if (work_id < 0) {
+			//printf("submit job failed err = %d\n", ret);
 			return sent;
+		}
+
+		if ((uint32_t)work_id%MLX5_REGEX_SQ_SIZE != mlx5_regex_job2entry(job_id)) {
+			printf("Job id mismatch job_id=%dwork_id %d, entry %d\n", queue->pi, work_id%MLX5_REGEX_SQ_SIZE, mlx5_regex_job2entry(job_id));
+			exit(-1);
 		}
 		queue->jobs[queue->pi % MLX5_REGEX_MAX_JOBS].user_id =
 			op->user_id; 
@@ -70,6 +102,7 @@ mlx5_regex_dev_enqueue(struct rte_regex_dev *dev, uint16_t qp_id,
 		sent++;
 		queue->pi++;
 	}
+
 	return sent;
 }
 
@@ -99,55 +132,42 @@ mlx5_regex_dev_dequeue(struct rte_regex_dev *dev, uint16_t qp_id,
  	int i;
 	struct rte_regex_ops *op; 
 	int rec = 0;
-	bool rx_ready = false;
-	bool tx_ready;
-	struct rxp_response *res;
 	int j;
-	int cnt = 0;
 	int offset;
 
-
-	rxp_queue_status(queue->handle, &rx_ready, &tx_ready); // resp_ready = true
-	if (!rx_ready) {
-		//printf("should exit\n");
-		return 0;
-	}
-	//printf(" pi = %d, ci = %d\n", queue->pi, queue->ci);
 	for (i = 0; i < nb_ops; i++) {
-		if ((queue->pi - queue->ci) == 0) {
-			//printf("Queue full rec = %d, pi = %d, ci = %d\n", rec, queue->pi, queue->ci);
-			return rec;
-		}
-		op = ops[i];
-		if (cnt <= 0) {	
-			cnt = rxp_read_response_batch(queue->handle,
-						      &queue->resp_ctx); //resp resdy = false
-			if (cnt == 0)
-				return rec;
-		}
-		res = rxp_next_response(&queue->resp_ctx);
-		cnt--;
-		if (res == NULL)
-			continue;
+		uint32_t job_id = (queue->ci)%MLX5_REGEX_MAX_JOBS;
+		struct mlx5_regex_job *job = &queue->jobs[job_id];
+		int ret = 0;
+		
+		ret = mlx5_regex_poll(queue->ctx, mlx5_regex_job2queue(job_id));
 
-		uint32_t id = DEVX_GET(regexp_metadata, res, job_id);
-		op->user_id = queue->jobs[id].user_id;
-		op->nb_matches = DEVX_GET(regexp_metadata, res, match_count);
-		op->nb_actual_matches = DEVX_GET(regexp_metadata, res,
-						 detected_match_count);
-		for (j = 0; j < op->nb_matches; j++) {
-			offset = sizeof(struct rxp_response_desc) + j * (64/8);
-			op->matches[j].group_id = DEVX_GET(regexp_match_tuple, 
-							  ((uint8_t *)res +
-							  offset), rule_id);
-			op->matches[j].offset = DEVX_GET(regexp_match_tuple, 
-							  ((uint8_t *)res +
-							  offset), start_ptr);
-			op->matches[j].len = DEVX_GET(regexp_match_tuple, 
-							  ((uint8_t *)res +
-							  offset), length);
+		if (ret < 0) {
+			printf("CQE error\n");
+			break;
 		}
-		queue->jobs[i].used = 0;
+
+		if (ret == 0)
+			break;
+
+		op = ops[i];
+		op->user_id = job->user_id;
+		//printf("jobid = %d, job->user_id)=%ld size=%ld\n", job_id, job->user_id, sizeof(struct rxp_response_desc));
+		op->nb_matches = DEVX_GET(regexp_metadata, job->metadata + 32, match_count);
+		op->nb_actual_matches = DEVX_GET(regexp_metadata, job->metadata +32,
+						 detected_match_count);
+		//print_raw(job->output, 1);
+
+		for (j = 0; j < op->nb_matches; j++) {
+			offset = MLX5_REGEX_RESP_SZ * j;
+			op->matches[j].group_id = DEVX_GET(regexp_match_tuple, 
+							  (job->output + offset), rule_id);
+			op->matches[j].offset = DEVX_GET(regexp_match_tuple, 
+							  (job->output +  offset), start_ptr);
+			op->matches[j].len = DEVX_GET(regexp_match_tuple, 
+							  (job->output +  offset), length);
+		}
+		job->used = 0;
 		rec++;
 		queue->ci++;
 	}
@@ -156,6 +176,6 @@ mlx5_regex_dev_dequeue(struct rte_regex_dev *dev, uint16_t qp_id,
 //		/*if (queue->jobs[res->header.job_id].used == 1)
 //			break;*/
 //	}
-	printf("rec = %d\n", rec);
+	//printf("rec = %d\n", rec);
 	return rec;
 }

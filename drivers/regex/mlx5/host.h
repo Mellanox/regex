@@ -6,7 +6,7 @@
 #ifndef _HOST_H_
 #define _HOST_H_
 
-#include "mlx5_regex.h"
+#include "mlx5.h"
 #include "rxp.h"
 
 #define MLNX_LOGGING_ENABLED            1       //Switch off printf's.
@@ -24,7 +24,7 @@
  * Note: Check if inline with RXP_TX_BURST_DEFAULT
  */
 #define NUM_SQS             64  //RXP_TX_BURST_DEFAULT?
-
+#define MAX_JOBS	    64
 /* Used for Submit jobs to API instead of doing extra copy! */
 struct rxp_mlnx_job_desc {
     uint16_t len;
@@ -74,7 +74,7 @@ struct rxp_sq_buffers {
 struct rxp_queue {
     struct rxp_mlnx_dev     *rxp;
     struct mlx5_regex_ctx   *rxp_job_ctx;   //Create a regex ctx per thread
-    struct rxp_sq_buffers   sq_buf[NUM_SQS];
+    struct rxp_sq_buffers   sq_buf[MAX_JOBS];
     //uint32_t                num_jobs_processed;
     uint32_t                num_resp_to_read;
     int                     q_id;           // App Queue ID number
