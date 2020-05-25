@@ -5,29 +5,75 @@
 #include <rte_rwlock.h>
 
 #include "mlx5_regex_mr.h"
+#include "mlx5_regex.h"
+
 #include "rxp-api.h"
 
 #define MLX5_REGEX_MAX_QUEUES 32
 
-#define MLX5_REGEX_MAX_JOBS 64
+#define MLX5_REGEX_NUM_SQS 64
+#define MLX5_REGEX_SQ_SIZE SQ_SIZE
+#define MLX5_REGEX_MAX_JOBS (MLX5_REGEX_NUM_SQS*MLX5_REGEX_SQ_SIZE)
+#define MLX5_REGEX_MAX_INPUT_OUTPUT (1 << 14)
+#define MLX5_REGEX_METADATA_SIZE 64
 
-struct mlx5_database_ctx {
-	uint32_t umem_id;
-	uint64_t offset;
+
+struct mlx5_regex_buff_ctx {
+	void *ptr;
+	struct mlx5_regex_buff *buff;
 };
 
 struct mlx5_regex_job {
 	uint64_t user_id;
-	int job_id;
+	uint32_t job_id;
 	int used;
+	uint8_t* input;
+	volatile uint8_t* output;
+	volatile uint8_t* metadata;
+	struct mlx5_wqe_data_seg input_seg;
+	struct mlx5_wqe_data_seg output_seg;
+	struct mlx5_wqe_data_seg metadata_seg;
+	struct mlx5_regex_wqe_ctrl_seg regex_ctrl;
 } __rte_cached_aligned;
+
+/*static uint32_t
+mlx5_regex_job_id_get(uint32_t queue, uint32_t entry) {
+	return (queue - 1)*MLX5_REGEX_SQ_SIZE + entry;
+}
+*/
+static inline uint32_t
+mlx5_regex_job2queue(uint32_t job_id) {
+	return (job_id - (job_id%MLX5_REGEX_SQ_SIZE))/MLX5_REGEX_SQ_SIZE;
+}
+
+static inline uint32_t
+mlx5_regex_job2entry(uint32_t job_id) {
+	return job_id%MLX5_REGEX_SQ_SIZE;
+}
+
+static inline uint32_t
+mlx5_regex_buffer_offset_get(uint32_t job_id)
+{
+	return (job_id%MLX5_REGEX_MAX_JOBS)*MLX5_REGEX_MAX_INPUT_OUTPUT;
+}
+
+static inline uint32_t
+mlx5_regex_metadata_offset_get(uint32_t job_id)
+{
+	return (job_id%MLX5_REGEX_MAX_JOBS)*MLX5_REGEX_METADATA_SIZE;
+}
 
 struct mlx5_regex_queues {
 	int handle;
+	uint32_t job_cnt;
 	uint32_t pi;
 	uint32_t ci;
+	struct mlx5_regex_ctx *ctx;
 	struct rxp_response_batch resp_ctx;
 	struct mlx5_regex_job jobs[MLX5_REGEX_MAX_JOBS];
+	struct mlx5_regex_buff_ctx metadata;
+	struct mlx5_regex_buff_ctx inputs;
+	struct mlx5_regex_buff_ctx outputs;
 };
 
 struct mlx5_regex_priv {

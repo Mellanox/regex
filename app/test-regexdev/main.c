@@ -61,9 +61,9 @@ main(int argc, char **argv)
 	const char *match_str = argv[2];
 
 	/* Initialise DPDK EAL */
-	ret = rte_eal_init(argc-2, argv+2);
+	ret = rte_eal_init(argc, argv);
 	if (ret < 0) {
-		rte_exit(EXIT_FAILURE, "Invalid EAL arguments!, usage: dpdk-test-regexdev <rof2 file> <string to match> [dpdk options]\n");
+		rte_exit(EXIT_FAILURE, "Invalid EAL arguments!, usage: dpdk-test-regexdev [dpdk options]\n");
 	}
 
 	force_quit = 0;
