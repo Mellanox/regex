@@ -8,7 +8,7 @@ if not is_linux
 endif
 
 fmt_name = 'mlx5_regex'
-deps += ['common_mlx5', 'pci', 'bus_pci', 'eal', 'sched']
+deps += ['common_mlx5', 'pci', 'bus_pci', 'eal', 'sched', 'regexdev']
 sources = files(
 	'mlx5_regex.c',
 )
