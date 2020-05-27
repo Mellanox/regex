@@ -16,6 +16,8 @@ CFLAGS += -g
 CFLAGS += -I$(RTE_SDK)/drivers/common/mlx5
 CFLAGS += -I$(BUILDDIR)/drivers/common/mlx5
 CFLAGS += -I$(RTE_SDK)/drivers/common/mlx5/linux
+CFLAGS += -I$(RTE_SDK)/drivers/common/mlx5/linux
+CFLAGS += -I$(BUILDDIR)/drivers/common/mlx5/linux
 CFLAGS += -D_BSD_SOURCE
 CFLAGS += -D_DEFAULT_SOURCE
 CFLAGS += -D_XOPEN_SOURCE=600
