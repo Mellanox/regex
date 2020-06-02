@@ -1535,3 +1535,81 @@ mlx5_devx_cmd_modify_qp_state(struct mlx5_devx_obj *qp, uint32_t qp_st_mod_op,
 	}
 	return ret;
 }
+
+/**
+ * Write to RXP registers.
+ *
+ * @param ctx
+ *   ibv device handle
+ * @param engine_id
+ *   Chooses on which engine the register will be written..
+ * @param addr
+ *   Register address.
+ * @param data
+ *   Data to be written to the register.
+ *
+ * @return
+ *   0 on success, a negative errno value otherwise and rte_errno is set.
+ */
+int
+mlx5_devx_regex_register_write(struct ibv_context *ctx, int engine_id,
+			       uint32_t addr, uint32_t data)
+{
+	uint32_t out[DEVX_ST_SZ_DW(set_regexp_register_out)] = {};
+	uint32_t in[DEVX_ST_SZ_DW(set_regexp_register_in)] = {};
+	int ret;
+
+	DEVX_SET(set_regexp_register_in, in, opcode,
+		 MLX5_CMD_SET_REGEX_REGISTERS);
+	DEVX_SET(set_regexp_register_in, in, engine_id, engine_id);
+	DEVX_SET(set_regexp_register_in, in, register_address, addr);
+	DEVX_SET(set_regexp_register_in, in, register_data, data);
+
+	ret = mlx5_glue->devx_general_cmd(ctx, in, sizeof(in), out, sizeof(out));
+	if (ret) {
+		DRV_LOG(ERR, "Set regexp register failed %d", ret);
+		rte_errno = errno;
+		return -errno;
+	}
+	return 0;
+}
+
+
+/**
+ * Read from RXP registers
+ *
+ * @param ctx
+ *   ibv device handle
+ * @param engine_id
+ *   Chooses from which engine to read.
+ * @param addr
+ *   Register address.
+ * @param data
+ *   Output containing the pointer to the data..
+ *
+ * @return
+ *   0 on success, a negative errno value otherwise and rte_errno is set.
+ */
+int
+mlx5_devx_regex_register_read(struct ibv_context *ctx, int engine_id,
+			      uint32_t addr, uint32_t *data)
+{
+	uint32_t out[DEVX_ST_SZ_DW(query_regexp_register_out)] = {};
+	uint32_t in[DEVX_ST_SZ_DW(query_regexp_register_in)] = {};
+	int ret;
+
+	DEVX_SET(query_regexp_register_in, in, opcode,
+		 MLX5_CMD_QUERY_REGEX_REGISTERS);
+	DEVX_SET(query_regexp_register_in, in, engine_id, engine_id);
+	DEVX_SET(query_regexp_register_in, in, register_address, addr);
+
+	ret = mlx5_glue->devx_general_cmd(ctx, in, sizeof(in), out,
+					  sizeof(out));
+	if (ret) {
+		DRV_LOG(ERR, "Query regexp register failed %d", ret);
+		rte_errno = errno;
+		return -errno;
+	}
+	*data = DEVX_GET(query_regexp_register_out, out, register_data);
+	return 0;
+}

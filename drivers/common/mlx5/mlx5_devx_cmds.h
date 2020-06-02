@@ -375,5 +375,9 @@ int mlx5_devx_cmd_modify_qp_state(struct mlx5_devx_obj *qp,
 __rte_internal
 int mlx5_devx_cmd_modify_rqt(struct mlx5_devx_obj *rqt,
 			     struct mlx5_devx_rqt_attr *rqt_attr);
+int mlx5_devx_regex_register_write(struct ibv_context *ctx, int engine_id,
+				   uint32_t addr, uint32_t data);
+int mlx5_devx_regex_register_read(struct ibv_context *ctx, int engine_id,
+				  uint32_t addr, uint32_t *data);
 
 #endif /* RTE_PMD_MLX5_DEVX_CMDS_H_ */
