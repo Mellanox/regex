@@ -12,7 +12,7 @@ CFLAGS += -DALLOW_EXPERIMENTAL_API
 CFLAGS += -O3
 
 # all source are stored in SRCS-y
-SRCS-y := main.c
+SRCS-y := tests.c main.c
 
 LDLIBS += -lrte_regexdev
 

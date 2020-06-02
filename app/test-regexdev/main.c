@@ -12,62 +12,12 @@
 #include <rte_eal.h>
 #include <rte_regexdev.h>
 
+#include "tests.h"
+
 static volatile int force_quit;
 
-#define TOTAL_JOBS 400
+#define TOTAL_JOBS 4
 #define STRING_LEN 16000
-
-struct sw_job {
-	struct rte_regex_iov (*iov[1]);
-};
-static void
-main_loop(const char *match_str )
-{
-	struct rte_regex_ops *ops[TOTAL_JOBS];
-	char buf[STRING_LEN];
-	int i;
-
-	for (i = 0; i < STRING_LEN; i++)
-		buf[i] = 0;
-	buf[STRING_LEN-1] = 0;	
-	for (i = 0; i < 10; i++) {
-		int offset = rand()%(STRING_LEN - 50);
-		strncpy(buf + offset, match_str, strlen(match_str));
-	}
-	
-	sprintf(buf + STRING_LEN -strlen(match_str)-1, "%s", match_str);
-	
-	struct sw_job sw_jobs[TOTAL_JOBS];
-
-	printf("Posting %d random jobs on buffer %s \n", TOTAL_JOBS, buf);
-	for (i = 0; i < TOTAL_JOBS; i++) {
-		ops[i] = rte_malloc(NULL, sizeof(*ops[0]), 0);
-   	        sw_jobs[i].iov[0] = rte_malloc(NULL, sizeof(* sw_jobs[i].iov[0]), 0);
-		ops[i]->bufs = &sw_jobs[i].iov;
-		ops[i]->num_of_bufs = 1;
-		ops[i]->group_id0 = 1;
-		ops[i]->user_id = i;
-		int offset = rand()%(STRING_LEN - 50);
-		(*ops[i]->bufs)[0]->buf_addr = buf + offset;
-		(*ops[i]->bufs)[0]->buf_size = (STRING_LEN - offset);
-	}
-	
-	int sent = 0, total_sent=0;
-	while (total_sent < TOTAL_JOBS) {
-		sent = rte_regex_enqueue_burst(0, 0, ops + total_sent, TOTAL_JOBS - total_sent);
-		printf("sent = %d\n", sent);
-		int done = 0;
-		while(done < sent) {
-			int d = rte_regex_dequeue_burst(0, 0, ops, sent);
-			for (i = 0; i < d; i++) {
-				printf("[%d] [%ld] number of matches = %d\n",i,ops[i]->user_id, ops[i]->nb_matches);
-			}
-			done += d;
-		}
-		total_sent += sent;
-	}
-	/* closing and releasing resources */
-}
 
 static int
 setup_dev_one(int dev_id)
@@ -129,14 +79,19 @@ main(int argc, char **argv)
 		if (ret)
 			break;
 	}
+	
+	rte_regex_rule_db_import(0, rules_db_file);
 
-	ret = rte_regex_rule_db_import(0, rules_db_file);
-	if (ret) {
-		printf("Failed to set rules db for dev %d", 0);
-		return ret;
-	}
-	main_loop(match_str);
-	//Currently causing segfault
-	//rte_regex_dev_stop(0);
+	ret |= mlx5_regex_simple_test(1, 0, 1, match_str);
+	ret |= mlx5_regex_simple_test(1, 0, 10, match_str);
+	ret |= mlx5_regex_simple_test(1, 0, 100, match_str);
+	ret |= mlx5_regex_simple_test(1, 1, 1, match_str);
+	ret |= mlx5_regex_simple_test(10, 1, 1, match_str);
+	ret |= mlx5_regex_simple_test(100, 1, 1, match_str);
+	ret |= mlx5_regex_simple_test(10, 1, 10, match_str);
+	ret |= mlx5_regex_simple_test(100, 1, 100, match_str);
+
+	ret |= mlx5_regex_perf_test(1024, match_str);
+
 	return ret;
 }
