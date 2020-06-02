@@ -49,7 +49,7 @@ mlx5_regex_dev_enqueue(struct rte_regex_dev *dev, uint16_t qp_id,
 	struct rte_regex_ops *op; 
 	int sent = 0, ret = 0;
 
-	printf(" pi = %d, ci = %d\n",  queue->pi, queue->ci);
+//	printf(" pi = %d, ci = %d\n",  queue->pi, queue->ci);
 	for (i = 0; i < nb_ops; i++) {
 		if ((queue->pi - queue->ci) >= MLX5_REGEX_MAX_JOBS)
 			return sent;
@@ -109,13 +109,13 @@ mlx5_regex_dev_dequeue(struct rte_regex_dev *dev, uint16_t qp_id,
 
 	rxp_queue_status(queue->handle, &rx_ready, &tx_ready); // resp_ready = true
 	if (!rx_ready) {
-		printf("should exit\n");
+		//printf("should exit\n");
 		return 0;
 	}
-	printf(" pi = %d, ci = %d\n", queue->pi, queue->ci);
+	//printf(" pi = %d, ci = %d\n", queue->pi, queue->ci);
 	for (i = 0; i < nb_ops; i++) {
 		if ((queue->pi - queue->ci) == 0) {
-			printf("Queue full rec = %d, pi = %d, ci = %d\n", rec, queue->pi, queue->ci);
+			//printf("Queue full rec = %d, pi = %d, ci = %d\n", rec, queue->pi, queue->ci);
 			return rec;
 		}
 		op = ops[i];
@@ -137,7 +137,7 @@ mlx5_regex_dev_dequeue(struct rte_regex_dev *dev, uint16_t qp_id,
 						 detected_match_count);
 		for (j = 0; j < op->nb_matches; j++) {
 			offset = sizeof(struct rxp_response_desc) + j * (64/8);
-			op->matches[j].rule_id = DEVX_GET(regexp_match_tuple, 
+			op->matches[j].group_id = DEVX_GET(regexp_match_tuple, 
 							  ((uint8_t *)res +
 							  offset), rule_id);
 			op->matches[j].offset = DEVX_GET(regexp_match_tuple, 
