@@ -18,6 +18,7 @@
 #include "mlx5_regex.h"
 #include "mlx5_regex_utils.h"
 #include "mlx5_rxp_csrs.h"
+#include "mlx5_rxp.h"
 
 int mlx5_regex_logtype;
 
@@ -25,6 +26,7 @@ const struct rte_regexdev_ops mlx5_regexdev_ops = {
 	.dev_info_get = mlx5_regex_info_get,
 	.dev_configure = mlx5_regex_configure,
 	.dev_qp_setup = mlx5_regex_qp_setup,
+        .dev_db_import = mlx5_regex_rules_db_import,
 };
 
 
@@ -150,6 +152,8 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 		goto error;
 	}
 	priv->ctx = ctx;
+	/* Default RXP programming mode to Shared. */
+	priv->prog_mode = MLX5_RXP_SHARED_PROG_MODE;
 	mlx5_regex_get_name(name, pci_dev);
 	priv->regexdev = rte_regexdev_register(name);
 	if (priv->regexdev == NULL) {
