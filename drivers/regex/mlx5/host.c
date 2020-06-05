@@ -270,6 +270,9 @@ static int rxp_init_rtru(uint8_t rxp_eng, uint32_t init_bits)
         return -1;
     }
 
+    /* clear any previous init modes */
+    ctrl_value &= ~(RXP_RTRU_CSR_CTRL_INIT_MODE_MASK);
+
     /* Check the rtru csr ctrl init bit. If it is set then clear it */
     if (ctrl_value & RXP_RTRU_CSR_CTRL_INIT)
     {
@@ -278,18 +281,7 @@ static int rxp_init_rtru(uint8_t rxp_eng, uint32_t init_bits)
                                   RXP_RTRU_CSR_CTRL, ctrl_value);
     }
 
-    /* Set the init bit in the rtru ctrl CSR. */
-    ctrl_value |= RXP_RTRU_CSR_CTRL_INIT;
-    mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
-                              RXP_RTRU_CSR_CTRL, ctrl_value);
-
-    /* Clear the init bit in the rtru ctrl CSR. */
-    ctrl_value &= ~(RXP_RTRU_CSR_CTRL_INIT);
-    mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
-                              RXP_RTRU_CSR_CTRL, ctrl_value);
-
-    /* Set the init_mode == 0 in the rtru ctrl CSR */
-    /* Note: Not required to init EM as Shared within Mnlx */
+    /* Set the init_mode bits in the rtru ctrl CSR */
     ctrl_value |= init_bits;
     mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
                               RXP_RTRU_CSR_CTRL, ctrl_value);
@@ -300,8 +292,18 @@ static int rxp_init_rtru(uint8_t rxp_eng, uint32_t init_bits)
     /* Poll the rtru status CSR until all the init done bits are set. */
     mlnx_log("Info: Waiting for RXP rule memory to complete init");
 
+    /* Set the init bit in the rtru ctrl CSR. */
+    ctrl_value |= RXP_RTRU_CSR_CTRL_INIT;
+    mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
+                                RXP_RTRU_CSR_CTRL, ctrl_value);
+
+
+    /* Clear the init bit in the rtru ctrl CSR */
+    ctrl_value &= ~(RXP_RTRU_CSR_CTRL_INIT);
+    mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
+                               RXP_RTRU_CSR_CTRL, ctrl_value);
+
     /* Check that the following bits are set in the RTRU_CSR. */
-    /* Note: Not expecting EM bit to be set for Mlnx */
     if (init_bits == RXP_RTRU_CSR_CTRL_INIT_MODE_L1_L2)
     {
         /* Must be incremental mode */
