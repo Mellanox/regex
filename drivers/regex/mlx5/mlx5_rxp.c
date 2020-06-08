@@ -18,6 +18,7 @@
 #include "mlx5_regex.h"
 #include "mlx5_regex_utils.h"
 #include "mlx5_rxp_csrs.h"
+#include "mlx5_rxp.h"
 
 #define MLX5_REGEX_MAX_MATCHES 255
 #define MLX5_REGEX_MAX_PAYLOAD_SIZE UINT16_MAX
@@ -183,6 +184,294 @@ rxp_init_rtru(struct ibv_context *ctx, uint8_t id, uint32_t init_bits)
 	return 0;
 }
 
+#if 0
+static int
+rxp_parse_rof(const char *buf, uint32_t len, struct mlx5_rxp_ctl_rules_pgm **rules)
+{
+	const char del[] = "\n\r";
+	char *line;
+	char *tmp;
+	char *cur_pos;
+	uint32_t lines;
+	uint32_t entries;
+	struct mlx5_rxp_rof_entry *curentry;
+
+	tmp = malloc(len);
+	if (!tmp)
+		return -ENOMEM;
+	memcpy(tmp, buf, len);
+	line = strtok(tmp, del);
+	while (line) {
+		if (line[0] != '#' && line[0] != '\0')
+			lines++;
+		line = strtok(NULL, del);
+	}
+	*rules = rte_malloc("", lines * sizeof(*curentry) + sizeof(**rules), 0);
+	if (!(*rules)) {
+		free(tmp);
+		return -ENOMEM;
+	}
+	memset(*rules, 0, lines * sizeof(curentry) + sizeof(**rules));
+	curentry = (*rules)->rules;
+	(*rules)->hdr.cmd = MLX5_RXP_CTL_RULES_PGM;
+	entries = 0;
+	memcpy(tmp, buf, len);
+	line = strtok(tmp, del);
+	while (line) {
+		if (line[0] == '#' || line[0] == '\0') {
+			line = strtok(NULL, del);
+			continue;
+		}
+		line = strtok(NULL, del);
+		curentry->type = strtoul(line, &cur_pos, 10);
+		if (cur_pos == line || cur_pos[0] != ',')
+			goto parse_error;
+		cur_pos++;
+		curentry->addr = strtoul(line, &cur_pos, 16);
+		if (cur_pos[0] != ',')
+			goto parse_error;
+		cur_pos++;
+		curentry->value = strtoul(line, &cur_pos, 16);
+		if (cur_pos[0] != '\0' && cur_pos[0] != '\n')
+			goto parse_error;
+		curentry++;
+		entries++;
+		if (entries > lines)
+			goto parse_error;
+		line = strtok(NULL, del);
+	}
+	(*rules)->count = entries;
+	(*rules)->hdr.len = entries * sizeof(*curentry) + sizeof(**rules);
+	free(tmp);
+	return 0;
+parse_error:
+	free(tmp);
+	if (*rules)
+		rte_free(*rules);
+	return -EINVAL;
+}
+static enum mlx5_rxp_program_mode
+rxp_prog_mode_get(void)
+{
+    return MLX5_RXP_PRIVATE_PROG_MODE;
+}
+#endif
+
+static int __rte_unused
+mlnx_update_database(struct mlx5_regex_db *db __rte_unused,
+		     uint16_t cmd __rte_unused, uint8_t id __rte_unused)
+{
+#if 0
+	unsigned int i;
+	uint8_t db_free = MLX5_RXP_MAX_NOT_USED;
+	uint8_t rxp_eng_currently_assigned = MLX5_RXP_MAX_NOT_USED;
+
+	/* Check which database rxp_eng is currently located if any? */
+	for (i = 0; i < (MLX5_RXP_MAX_ENGINES + MLX5_RXP_SHADOW_EM_COUNT); i++)
+	{
+		if (db[i].db_assigned_to_eng_num == id)
+		{
+			rxp_eng_currently_assigned = i;
+			break;
+		}
+	}
+	/*
+     * If private mode then, we can keep the same db ptr as RXP will be
+     * programming EM itself if necessary, however need to see if programmed yet
+     */
+	if ((RXP_PRIVATE_PROG_MODE == mlnx_prog_mode_get()) &&
+	    (rxp_eng_currently_assigned != RXP_MAX_NOT_USED))
+	{
+		return rxp_eng_currently_assigned;
+	}
+
+	/* TODO ensure set all DB memory to 0xff before setting db up! */
+
+	/* Check for inactive db memory to use */
+	for (i = 0; i < (MAX_RXP_ENGINES + RXP_SHADOW_EM_COUNT); i++)
+	{
+		if (rxp.rxp_db_desc[i].db_active == false)
+		{
+			/* Set this db to active now as free to use */
+			rxp.rxp_db_desc[i].db_active = true;
+
+			/* Now unassign last db index in use by RXP Eng if any? */
+			if (rxp_eng_currently_assigned != RXP_MAX_NOT_USED)
+			{
+				rxp.rxp_db_desc[rxp_eng_currently_assigned].db_active = false;
+				rxp.rxp_db_desc[rxp_eng_currently_assigned].db_assigned_to_eng_num = RXP_MAX_NOT_USED;
+
+				/* Set all DB memory to 0x00 before setting up Database */
+				memset(rxp.rxp_db_desc[i].database_ptr, 0x00, MAX_DB_SIZE);
+			}
+
+			/* Now reassign new db index with RXP Eng */
+			rxp.rxp_db_desc[i].db_assigned_to_eng_num = rxp_eng;
+
+			db_free = i;
+			break;
+		}
+	}
+
+	if (db_free == RXP_MAX_NOT_USED)
+	{
+		return -1;
+	}
+
+#endif
+	return 0;
+}
+
+static int
+rxp_program_rules(struct mlx5_regex_priv *priv __rte_unused,
+		  const char *rule_buf __rte_unused, uint32_t len __rte_unused)
+{
+#if 0
+	struct ibv_context *ctx = priv->ctx;
+	struct mlx5_rxp_ctl_rules_pgm *rules = NULL;
+	int ret;
+	uint32_t rule_cnt;
+
+	if (len ==0 || !rule_buf)
+		return -EINVAL;
+	ret = rxp_parse_rof(rule_buf, len, &rules);
+	if (ret) {
+		DRV_LOG(ERR, "can't parse ROF file.");
+		returnn ret;
+	}
+	rule_cnt = rules->count;
+	/* Program both RXP's with the following rules...*/
+	for (i = 0; i < MLX5_RXP_MAX_ENGINES; i++)
+	{
+		if (MLX5_RXP_PRIVATE_PROG_MODE == rxp_prog_mode_get())
+		{
+			/*
+        		 * Need to set the mlnx_set_database immediately as when
+			 * we start pushing instructions to RXP, we need to be
+			 * sure the RXP has the capability to write to
+			 * Shared/External memory!
+        		 */
+			db_free = mlnx_update_database(priv->db,rules->hdr.cmd,
+						       i);
+			if (db_free < 0)
+			{
+				/* Failed to find free database to use */
+				mlnx_log("Failed to setup new database memory - Error [%d]!\n",
+					 db_free);
+				return db_free;
+			}
+
+			/*
+             * TODO: Note: As unsure what mlx5_regex_database_set() function
+             *       actually does, I'm setting up db pointer early here before
+             *       actually doing any private rule writes. Notably when start
+             *       pushing rules to RXP this database must be setup else
+             *       probably run into RXP write errors etc!??
+             */
+			ret = mlnx_set_database(i, db_free); //Ensure RXP Eng idle before run
+
+			if (ret < 0)
+			{
+				/* Failed to set/register database with Mellanox */
+				mlnx_log("Failed to reg database with Mellanox - Error [%d]!\n",
+					 ret);
+				return ret;
+			}
+
+			ret = mlnx_write_rules(rules, rules->hdr.len, i);
+
+			if (ret < 0)
+			{
+				/* Failed to program rules */
+				mlnx_log("Failed to write rules to RXP - Error [%d]!\n", ret);
+				return ret;
+			}
+
+			mlnx_log("Info: Programmed RXP Eng %d - mlnx_init!\n", i);
+		}
+		else if (RXP_SHARED_PROG_MODE == mlnx_prog_mode_get())
+		{
+			/* Write all External Rules from rules file into shared/EM memory */
+
+			/* Writing External/Shared rules first as can keep RXP running*/
+			db_free = mlnx_update_database(rules->hdr.cmd, i);
+
+			if (db_free < 0)
+			{
+				/* Failed to find free database to use */
+				mlnx_log("Failed to setup new database memory - Error [%d]!\n",
+					 db_free);
+				return db_free;
+			}
+
+			/*
+             * NOTE: TODO: Might speed up the 2nd programming by copying RXP
+             *             ENG0 rules into RXP Eng1 instead of looping rules?
+             */
+
+			/* Now write rules first before taking RXP eng offline */
+			ret = mlnx_write_shared_rules(rules, rules->hdr.len, i, db_free);
+
+			if (ret < 0)
+			{
+				/* Failed to write new rules to EM */
+				mlnx_log("Failed to write rules to RXP - Error [%d]!\n", db_free);
+				return db_free;
+			}
+
+			/*
+             * Now inform Mlnx that db has changed address and RXP idle.
+             * The following call will block until RXPx is idle, it effectively
+             * disables this engine until resumed later following programming.
+             */
+			ret = mlnx_set_database(i, db_free);
+
+			if (ret < 0)
+			{
+				/* Failed to set/register database with Mellanox */
+				mlnx_log("Failed to reg database with Mellanox - Error [%d]!\n",
+					 ret);
+				return ret;
+			}
+
+			/* Finally write any internal private rules to RXP */
+			ret = mlnx_write_rules(rules, rules->hdr.len, i);
+
+			if (ret < 0)
+			{
+				/* Failed to program rules */
+				mlnx_log("Failed to write rules to RXP - Error [%d]!\n", ret);
+				return ret;
+			}
+		}
+		else
+		{
+			/* Failed to read valid programming mode */
+			mlnx_log("Failed to read valid RXP programming mode: Mode [%d]\n",
+				 mlnx_prog_mode_get());
+			return -1;
+		}
+
+		/*
+         * Need to start RXP engine again after programming has
+         * finished successfully.
+         */
+		mlnx_resume_rxp(i);
+
+		/* A bit of a fudge! But ensure we keep rule cnt valid for both RXPs */
+		rules->count = keep_rule_count;
+	}
+
+	/* Both RXP's now programmed */
+	rxp_prog_status = true;
+
+	free(rules);
+
+	return ret;
+#endif
+	return 0;
+}
+
 /**
  * Init the engine.
  *
@@ -310,6 +599,7 @@ mlx5_regex_configure(struct rte_regexdev *dev,
 		}
 
 	}
+	rxp_program_rules(priv, cfg->rule_db, cfg->rule_db_len);
 	return 0;
 configure_error:
 	if (priv->qps)

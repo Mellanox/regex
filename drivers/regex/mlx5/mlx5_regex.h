@@ -5,6 +5,8 @@
 #ifndef MLX5_REGEX_H
 #define MLX5_REGEX_H
 
+#include "mlx5_rxp.h"
+
 struct mlx5_regex_sq {
 	uint32_t nb_desc; /* Number of desc for this object. */
 };
@@ -15,6 +17,16 @@ struct mlx5_regex_qp {
 	struct mlx5_regex_sq *sqs; /* Pointer to sq array. */
 };
 
+struct mlx5_regex_db {
+	void *ptr; /* Pointer to the db memory. */
+	uint32_t len; /* The memory len. */
+	bool active; /* Active flag. */
+	uint8_t db_assigned_to_eng_num;
+	/**< To which engine the db is connected. */
+	struct mlx5_regex_umem umem;
+	/**< The umem struct. */
+};
+
 struct mlx5_regex_priv {
 	TAILQ_ENTRY(mlx5_regex_priv) next;
 	struct ibv_context *ctx; /* Device context. */
@@ -23,6 +35,8 @@ struct mlx5_regex_priv {
 	uint16_t nb_queues; /* Number of queues. */
 	struct mlx5_regex_qp *qps; /* Pointer to the qp array. */
 	uint16_t nb_max_matches; /* Max number of matches. */
+	struct mlx5_regex_db db[MLX5_RXP_MAX_ENGINES +
+				MLX5_RXP_SHADOW_EM_COUNT];
 };
 
 /* mlx5_rxp.c */
