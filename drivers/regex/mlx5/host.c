@@ -66,7 +66,13 @@
 
 #include "rxp-csrs.h"
 #include "rxp-api.h"
-#include "host.h" //"mlx5_regex.h" included here
+#include "host.h"
+
+//TODO: get actual VIPER version number for BF2 release as this check not ideal!?
+#define VIPER_BF2            1
+
+#define RXP_INST_OFFSET      3u
+#define RXP_INST_BLOCK_SIZE  8u
 
 /* The maximum size of any RXP rules set */
 #define MAX_SIZE_RES_DES    (sizeof(struct rxp_response_desc))
@@ -86,8 +92,9 @@ static struct rxp_mlnx_dev rxp;
 //TODO put this mode into its own QUEUE!
 //TODO: Check within Incremental mode if safe to virgin program in Shared mode,
 //      then to do incremental update in Private mode? Should be ok! Double check!
-/* Set programming mode default to shared */ //TODO Private until get inital testing sorted!!
-static enum rxp_program_mode rxp_prog_mode = RXP_PRIVATE_PROG_MODE;//RXP_SHARED_PROG_MODE;
+/* Set programming mode default to shared */
+static enum rxp_program_mode rxp_prog_mode = RXP_PRIVATE_PROG_MODE;
+                                             //RXP_SHARED_PROG_MODE;
 
 /* ***************************************************************** */
 /* ***************** Private Func Declarations ********************* */
@@ -253,7 +260,6 @@ static int rxp_poll_csr_for_value(struct rxp_mlnx_dev *rxp, uint32_t *value,
     return ret;
 }
 
-//TODO add incremental programming in here...
 static int rxp_init_rtru(uint8_t rxp_eng, uint32_t init_bits)
 {
     uint32_t ctrl_value;
@@ -718,6 +724,21 @@ int mlnx_write_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count __rte_unuse
                  * Skip EM rules as managed previously offline for
                  * better performance
                  */
+                if (pending > 0)
+                {
+                    /* Flush rules */
+                    rule_offset = (rule_cnt - pending);
+                    ret = rxp_flush_rules(&rules->rules[rule_offset], pending,
+                                      rxp_eng);
+
+                    if (ret <= 0)
+                    {
+                        mlnx_log("Error: CP read failed (flush_rules)!");
+                        return ret;
+                    }
+                    pending = 0;
+                }
+
                 rule_cnt++;
             }
             else
@@ -871,7 +892,8 @@ int mlnx_write_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count __rte_unuse
 int mlnx_write_shared_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count,
                      uint8_t rxp_eng, uint8_t db_to_use)
 {
-    uint32_t rule_cnt;
+    uint32_t rule_cnt, rof_rule_addr;
+    uint64_t tmp_write_swap[4];
 
     if (rxp_prog_mode == RXP_MODE_NOT_DEFINED)
     {
@@ -884,7 +906,6 @@ int mlnx_write_shared_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count,
     }
 
     rule_cnt = 0;
-    rxp.rxp_db_desc[db_to_use].database_byte_cnt = 0;
 
     while (rule_cnt < rules->count)
     {
@@ -892,27 +913,93 @@ int mlnx_write_shared_rules(struct rxp_ctl_rules_pgm *rules, uint32_t count,
             && (rxp_prog_mode == RXP_SHARED_PROG_MODE))
         {
             /* This is programming directly to Shared Memory without RXP! */
-
-            /* Check EM size before write */
-            if ((rxp.rxp_db_desc[db_to_use].database_byte_cnt + sizeof(uint64_t))
-                    >= MAX_DB_SIZE)
+#ifdef VIPER_BF2
+            /*
+             * Note there are always blocks of 8 instructions for 7's written
+             * sequentially. However there is no guarentee that all blocks are
+             * sequential!
+             */
+            if (count >= (rule_cnt + RXP_INST_BLOCK_SIZE))
             {
-                /* Error as exeeded database memory size*/
-                mlnx_log("Error: Database exceeded max allocation! [Eng:%d]",
-                            rxp_eng);
+                /* Ensure memory write not exceeding boundary */
+                /* Check essential to ensure 0x10000 offset accounted for! */
+                if ((uint8_t*)((uint8_t*)rxp.rxp_db_desc[db_to_use].database_ptr +
+                    ((rules->rules[rule_cnt + 7].addr << RXP_INST_OFFSET))) >=
+                        ((uint8_t*)((uint8_t*)rxp.rxp_db_desc[db_to_use].database_ptr
+                           + MAX_DB_SIZE)))
+                {
+                    /* Error as exeeded database memory boundary */
+                    mlnx_log("Error: Database exceeded memory boundary [Eng:%d]",
+                                   rxp_eng);
+                    return -1;
+                }
+
+               /* Rule address Offset to align with RXP external instruction offset */
+                rof_rule_addr = (rules->rules[rule_cnt].addr << RXP_INST_OFFSET);
+
+                /* 32 byte instruction swap
+                 * NOTE: This is a current work around for a bug found within h/w
+                 * regarding read and writes 32byte swaps RM #2178754
+                 */
+                tmp_write_swap[0] = le64toh(rules->rules[(rule_cnt + 4)].value);
+                tmp_write_swap[1] = le64toh(rules->rules[(rule_cnt + 5)].value);
+                tmp_write_swap[2] = le64toh(rules->rules[(rule_cnt + 6)].value);
+                tmp_write_swap[3] = le64toh(rules->rules[(rule_cnt + 7)].value);
+
+                /* Write only 4 of the 8 instructions */
+                memcpy((uint8_t*)((uint8_t*)rxp.rxp_db_desc[db_to_use].database_ptr +
+                       rof_rule_addr), &tmp_write_swap, (sizeof(uint64_t) * 4));
+
+                /* Now write 1st 4 rules of block after the last 4 */
+                rof_rule_addr = (rules->rules[(rule_cnt + 4)].addr << RXP_INST_OFFSET);
+
+                tmp_write_swap[0] = le64toh(rules->rules[(rule_cnt + 0)].value);
+                tmp_write_swap[1] = le64toh(rules->rules[(rule_cnt + 1)].value);
+                tmp_write_swap[2] = le64toh(rules->rules[(rule_cnt + 2)].value);
+                tmp_write_swap[3] = le64toh(rules->rules[(rule_cnt + 3)].value);
+
+                memcpy((uint8_t*)((uint8_t*)rxp.rxp_db_desc[db_to_use].database_ptr +
+                       rof_rule_addr), &tmp_write_swap, (sizeof(uint64_t) * 4));
+            }
+            else
+            {
+                /* Must have an error in rule programming! */
                 return -1;
             }
 
-            /* TODO:Check the data is written correctly here (Byte order)? */
+            /* Fast forward as already handled block of 8 */
+            rule_cnt += RXP_INST_BLOCK_SIZE;
+#else
+
+            /* Ensure memory write not exceeding boundary */
+            /* Check essential to ensure 0x10000 offset accounted for! */
+            if ((uint8_t*)((uint8_t*)rxp.rxp_db_desc[db_to_use].database_ptr +
+                (rules->rules[rule_cnt].addr << RXP_INST_OFFSET)) >=
+                    (uint8_t*)((uint8_t*)rxp.rxp_db_desc[db_to_use].database_ptr
+                                                                 + MAX_DB_SIZE))
+            {
+                /* Error as exeeded database memory boundary */
+                mlnx_log("Error: Database exceeded memory boundary [Eng:%d]",
+                               rxp_eng);
+                return -1;
+            }
+
+            /* Rule address Offset to align with RXP external instruction offset */
+            rof_rule_addr = (rules->rules[rule_cnt].addr << RXP_INST_OFFSET);
+            rof_value = le64toh(rules->rules[rule_cnt].value);
+
             memcpy((uint8_t*)((uint8_t*)rxp.rxp_db_desc[db_to_use].database_ptr +
-                        rxp.rxp_db_desc[db_to_use].database_byte_cnt),
-                            &rules->rules[rule_cnt].value, sizeof(uint64_t));
+                       rof_rule_addr), &rof_value, sizeof(uint64_t));
 
-            /* Start keeping account of data written to database memory */
-            rxp.rxp_db_desc[db_to_use].database_byte_cnt += sizeof(uint64_t);
+            rule_cnt++;
+
+#endif //VIPER_BF2
         }
-
-        rule_cnt++;
+        else
+        {
+            /* Must be something other than EM rule */
+            rule_cnt++;
+        }
     }
 
     return 1;
@@ -1527,9 +1614,8 @@ int mlnx_set_database(uint8_t rxp_eng, uint8_t db_to_use)
      * Stop RXP before doing any programming. Command will return when RXP
      * engine is idle.
      */
-	
     mlx5_regex_engine_stop(rxp.device_ctx, rxp_eng);
-return 1;
+    
     rxp.rxp_db_desc[db_to_use].db_ctx.umem_id =
                                     rxp.rxp_db_desc[db_to_use].db_umem->umem_id;
     rxp.rxp_db_desc[db_to_use].db_ctx.offset = 0,
@@ -1631,7 +1717,7 @@ int mlnx_update_database(uint16_t prog_command, uint8_t rxp_eng)
 int mlnx_init(struct ibv_context *ctx)
 {
     int err;
-    uint32_t fpga_ident = 0;
+    uint32_t fpga_ident = 0, i;
   
 
     if (pthread_mutex_init(&(rxp.lock), NULL) != 0)
@@ -1656,7 +1742,7 @@ int mlnx_init(struct ibv_context *ctx)
         mlnx_log("Regexp not supported");
         goto tidyup_context;
     }
-#if 0
+
     /* Setup database memories for both RXP engines + reprogram memory */
     for (i = 0; i < (MAX_RXP_ENGINES + RXP_SHADOW_EM_COUNT); i++)
     {
@@ -1693,7 +1779,7 @@ int mlnx_init(struct ibv_context *ctx)
         rxp.rxp_db_desc[i].db_active = false;
         rxp.rxp_db_desc[i].db_assigned_to_eng_num = RXP_MAX_NOT_USED;
     }
-#endif
+
     /*
      * ***********************************************************************
      * ***   Not setting up database pointer yet, wait until after programming
@@ -1731,7 +1817,6 @@ int mlnx_init(struct ibv_context *ctx)
     return 1;
 
 tidyup_mem:
-#if 0
     for (i = 0; i < (MAX_RXP_ENGINES + RXP_SHADOW_EM_COUNT); i++)
     {
         if (rxp.rxp_db_desc[i].database_ptr)
@@ -1744,7 +1829,6 @@ tidyup_mem:
             mlx5dv_devx_umem_dereg(rxp.rxp_db_desc[i].db_umem);
         }
     }
-#endif
 tidyup_context:
     //mlx5_free_context(rxp.device_ctx);//No longer in Mlnx API try:
     //free(rxp.device_ctx); //TODO check if this is right 

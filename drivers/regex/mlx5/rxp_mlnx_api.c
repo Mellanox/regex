@@ -758,10 +758,30 @@ int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile,
                 return db_free;
             }
 
+            ret = mlnx_set_database(i, db_free);
+
+            if (ret < 0)
+            {
+                /* Failed to set/register database with Mellanox */
+                mlnx_log("Failed to reg database with Mellanox - Error [%d]!\n",
+                         ret);
+                return ret;
+            }
+
+            ret = mlnx_write_rules(rules, rules->hdr.len, i);
+
+            if (ret < 0)
+            {
+                /* Failed to program rules */
+                mlnx_log("Failed to write rules to RXP - Error [%d]!\n", ret);
+                return ret;
+            }
+
             /*
              * NOTE: TODO: Might speed up the 2nd programming by copying RXP
-             *             ENG0 rules into RXP Eng1 instead of looping rules?
+             *      ENG0 rules into RXP Eng1 instead of looping rules?
              */
+            rules->count = keep_rule_count;
 
             /* Now write rules first before taking RXP eng offline */
             ret = mlnx_write_shared_rules(rules, rules->hdr.len, i, db_free);
@@ -770,7 +790,7 @@ int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile,
             {
                 /* Failed to write new rules to EM */
                 mlnx_log("Failed to write rules to RXP - Error [%d]!\n", db_free);
-                return db_free;
+                return ret;
             }
 
             /*
@@ -785,16 +805,6 @@ int rxp_program_rules(unsigned rxp __rte_unused, const char *rulesfile,
                 /* Failed to set/register database with Mellanox */
                 mlnx_log("Failed to reg database with Mellanox - Error [%d]!\n",
                          ret);
-                return ret;
-            }
-
-            /* Finally write any internal private rules to RXP */
-            ret = mlnx_write_rules(rules, rules->hdr.len, i);
-
-            if (ret < 0)
-            {
-                /* Failed to program rules */
-                mlnx_log("Failed to write rules to RXP - Error [%d]!\n", ret);
                 return ret;
             }
         }
