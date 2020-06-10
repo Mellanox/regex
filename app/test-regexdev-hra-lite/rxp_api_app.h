@@ -45,7 +45,7 @@
 /*
  * Number of jobs to scan before exiting.
  */
-#define HRA_NUM_JOBS         100ull
+#define HRA_NUM_JOBS         1ull
 #define RXP_NUM_QUEUES       1u      //#App queue/cores, not RXP Engs
 
 #define INVALID_STRTOL_CONVERSION(value, string, endptr) \
