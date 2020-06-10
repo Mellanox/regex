@@ -63,7 +63,7 @@
 #include "hra_platform.h"
 
 #define EXTRA_TESTS 1
-#define SNORT_SUBSETS 1
+//#define SNORT_SUBSETS 1
 /*
  * Number of threads to use. There must be sufficient RXP hardware queues to
  * support this (max 8 on the RXP Accelerator PCIe card)
@@ -78,7 +78,9 @@
 /*
  * ROF file used to program rules memories.
  */
-const char *rof_file_name = "rof/synthetic.rof2";
+const char *rof_file_name = "rof/MS_rules_13_combined_5.0.BF2.rof2";
+//const char *rof_file_name = "rof/l7_em.rof2";
+//const char *rof_file_name = "rof/synthetic.rof2";
 
 /*
  * Packets are processed whilst this variable is non-0. Set to 0 by Ctrl-C
@@ -90,7 +92,7 @@ int process_packets = 1;
  * Global data structure which is initialized with random data.
  */
 char data[RXP_MAX_JOB_LENGTH];
-char testdata1[] = {"This is a test string, hello world! ABCDEFGHIJKLM GIF89a YCLC_E NOPQRSTUVWXYZABCDThis is a test string, hello world! ABCDEFGHIJKLMNOPQRSTUVWXYZABCD skillz abcdefghijklmnop ficken connected client"};
+char testdata1[] = {"This is a test string, hello world! ABCDEFGHIJKLM test GIF89a YCLC_E NOPQRSTUVWXYZABCDThis is a test string, hello world! 12345678910111213141516ABCDEFGHIJKLMNOPQRSTUVWXYZABCD skillz abcdefghijklmnop ficken connected client...ustar..ustar...ustar"};
 //char testdata1[] = {[0 ... 126] = 1}; //?? Query all zeros
 //char testdata1[] = {[0 ... 510] = 1};
 //char testdata1[] = { [0 ... 1023] = 1};
