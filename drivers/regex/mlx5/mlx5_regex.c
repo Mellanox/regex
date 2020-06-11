@@ -7,47 +7,7 @@
 #include "mlx5_regex.h"
 #include "mlx5_regex_utils.h"
 
-#define MAX_WQE_INDEX (1<<16)
-#define LOG_CQ_SIZE (LOG_SQ_SIZE)
-#define CQ_SIZE (1<<LOG_CQ_SIZE)
 
-int mlx5_regex_logtype;
-
-struct regex_caps {
-	uint8_t supported;
-	u8 num_of_engines;
-	u8 log_crspace_size;
-};
-
-struct mlx5_regex_cq {
-	int cqn;
-	volatile uint32_t *cq_dbr;
-	volatile uint8_t *cq_buff;
-	unsigned int ci;
-	struct mlx5dv_devx_obj *devx_obj;
-};
-
-struct mlx5_regex_sq {
-	int qpn;
-	struct mlx5dv_devx_obj *devx_obj;
-	uint32_t *qp_dbr;
-	struct mlx5_regex_cq cq;
-	void* wq_buff;
-	unsigned int pi;
-	unsigned int db_pi;
-};
-
-struct mlx5_regex_ctx {
-	struct ibv_context *ibv_ctx;
-	struct regex_caps caps;
-	struct mlx5_regex_sq *qps;
-	unsigned int num_qps;
-	int pd;
-	uint32_t eq;
-	void *eq_buff;
-	struct mlx5dv_devx_uar *uar;
-	int uuar;
-};
 struct mlx5_database_ctx;
 
 /**
@@ -264,6 +224,9 @@ static int mlx5_regex_wq_open(struct mlx5_regex_ctx *ctx,
 	}
 	qp->qpn = create_sq(ctx->ibv_ctx, &qp->wq_buff, ctx->uar, &qp->qp_dbr,
 			    qp->cq.cqn, ctx->pd, &qp->devx_obj, 0);
+	qp->last_wqe_counter = 0xffff;	
+	qp->cq.ci = 0;
+	qp->pi = 0;
 	if (!qp->qpn || !qp->devx_obj) {
 		DRV_LOG(ERR, "sq creation failed %s\n", strerror(errno));
 		return -1;
@@ -518,12 +481,18 @@ int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sqid)
 	if (check_cqe(cqe, CQ_SIZE, sq->cq.ci) == MLX5_CQE_STATUS_HW_OWN)
 		return 0;
 
-	sq->cq.ci++;
+	sq->cq.ci++;// = (sq->cq.ci + 1) & 0xffffff;
 	asm volatile("" ::: "memory");
 	sq->cq.cq_dbr[0] = htobe32(sq->cq.ci & 0xffffff);
 	//printf("After Poll cqe 0x%x for qp 0x%x:\n", sq->cq.cqn, sq->qpn);
 	//print_raw(cqe, 1);	
-	return 1;
+	uint16_t wqe_counter = be16toh(cqe->wqe_counter);
+	int total = wqe_counter > sq->last_wqe_counter ? 
+			    wqe_counter - sq->last_wqe_counter : 
+				(int)(0x10000 + wqe_counter) - sq->last_wqe_counter;
+
+	sq->last_wqe_counter = wqe_counter;
+	return total;
 }
 
 static int _mlx5_regex_database_set(struct ibv_context *ctx, int engine_id,
