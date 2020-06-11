@@ -7,6 +7,9 @@
 
 #include <mlx5_devx_cmds.h>
 #include <mlx5_prm.h>
+
+#include "mlx5_regex_utils.h"
+
 void print_raw(volatile uint8_t*, size_t cnt);
 
 //#define REGEX_MLX5_NO_REAL_HW 1
@@ -17,6 +20,49 @@ struct mlx5_regex_wqe_ctrl_seg {
        __be32 ctrl_subset_id_2_subset_id_3;
 };
 
+
+#define MAX_WQE_INDEX (1<<16)
+#define LOG_CQ_SIZE (LOG_SQ_SIZE)
+#define CQ_SIZE (1<<LOG_CQ_SIZE)
+
+int mlx5_regex_logtype;
+
+struct regex_caps {
+	uint8_t supported;
+	u8 num_of_engines;
+	u8 log_crspace_size;
+};
+
+struct mlx5_regex_cq {
+	int cqn;
+	volatile uint32_t *cq_dbr;
+	volatile uint8_t *cq_buff;
+	unsigned int ci;
+	struct mlx5dv_devx_obj *devx_obj;
+};
+
+struct mlx5_regex_sq {
+	int qpn;
+	struct mlx5dv_devx_obj *devx_obj;
+	uint32_t *qp_dbr;
+	struct mlx5_regex_cq cq;
+	void* wq_buff;
+	unsigned int pi;
+	unsigned int db_pi;
+	uint16_t last_wqe_counter;
+};
+
+struct mlx5_regex_ctx {
+	struct ibv_context *ibv_ctx;
+	struct regex_caps caps;
+	struct mlx5_regex_sq *qps;
+	unsigned int num_qps;
+	int pd;
+	uint32_t eq;
+	void *eq_buff;
+	struct mlx5dv_devx_uar *uar;
+	int uuar;
+};
 struct mlx5_database_ctx {
 	uint32_t umem_id;
 	uint64_t offset;

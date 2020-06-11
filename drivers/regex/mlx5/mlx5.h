@@ -11,7 +11,7 @@
 
 #define MLX5_REGEX_MAX_QUEUES 32
 
-#define MLX5_REGEX_NUM_SQS 64
+#define MLX5_REGEX_NUM_SQS 16
 #define MLX5_REGEX_SQ_SIZE SQ_SIZE
 #define MLX5_REGEX_MAX_JOBS (MLX5_REGEX_NUM_SQS*MLX5_REGEX_SQ_SIZE)
 #define MLX5_REGEX_MAX_INPUT_OUTPUT (1 << 14)
@@ -41,6 +41,7 @@ mlx5_regex_job_id_get(uint32_t queue, uint32_t entry) {
 	return (queue - 1)*MLX5_REGEX_SQ_SIZE + entry;
 }
 */
+
 static inline uint32_t
 mlx5_regex_job2queue(uint32_t job_id) {
 	return (job_id - (job_id%MLX5_REGEX_SQ_SIZE))/MLX5_REGEX_SQ_SIZE;
@@ -102,4 +103,7 @@ int mlx5_regex_dev_enqueue(struct rte_regex_dev *dev, uint16_t qp_id,
 			   struct rte_regex_ops **ops, uint16_t nb_ops);
 int mlx5_regex_dev_dequeue(struct rte_regex_dev *dev, uint16_t qp_id,
 			   struct rte_regex_ops **ops, uint16_t nb_ops);
+			   int
+mlx5_regex_dev_fastpath_prep(struct mlx5_regex_priv *priv, uint16_t qp_id);
+
 #endif

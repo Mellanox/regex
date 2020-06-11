@@ -180,7 +180,7 @@ static void rxp_disable(uint8_t rxp_eng)
     }
 
     ctrl &= ~RXP_CSR_CTRL_GO;
-
+   
     if ((ret = mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
             RXP_CSR_CTRL, ctrl)))
     {
@@ -205,7 +205,7 @@ static void rxp_enable(uint8_t rxp_eng)
     }
 
     ctrl |= RXP_CSR_CTRL_GO;
-
+    ctrl |= (1<<7);
     if ((ret = mlx5_regex_register_write(rxp.device_ctx, rxp_eng,
             RXP_CSR_CTRL, ctrl)))
     {

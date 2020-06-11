@@ -123,6 +123,7 @@ int mlx5_regex_simple_test(size_t num_str, int rand_pos, size_t num_jobs,
 
 	if (total_matches != total_matches_expected) {
 		printf("Error: matches expected %ld, actual %ld\n", total_matches_expected, total_matches);
+		getchar();
 		ret = -1;
 	}
 	if (ret < 0)
@@ -160,7 +161,7 @@ int mlx5_regex_perf_test(size_t burst, const char* match_str)
 		}
 	
 		time_t start = clock();
-		size_t total_jobs = (1<<27);
+		size_t total_jobs = (1<<25);
 		size_t j, total_done=0, empty_polls=0, done, total_polls=0, total_sent=0;
 		for (j = 0; j < total_jobs; j+=burst) {
 			total_sent += rte_regex_enqueue_burst(0, 0, ops, burst);

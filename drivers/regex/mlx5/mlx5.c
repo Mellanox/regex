@@ -247,6 +247,7 @@ setup_fastpath(struct mlx5_regex_priv *priv, uint32_t q_id)
 			    		    mlx5_regex_get_lkey(q->outputs.buff),
 							(uintptr_t)q->jobs[i].output);
 	}
+	mlx5_regex_dev_fastpath_prep(priv, q_id);
 	return 0;	
 }
 
