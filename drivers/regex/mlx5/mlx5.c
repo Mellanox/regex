@@ -243,7 +243,7 @@ setup_fastpath(struct mlx5_regex_priv *priv, uint32_t q_id)
 			    		    mlx5_regex_get_lkey(q->metadata.buff),
 							(uintptr_t)q->jobs[i].metadata);
 		
-		mlx5dv_set_data_seg(&q->jobs[i].output_seg, 0x1000,
+		mlx5dv_set_data_seg(&q->jobs[i].output_seg, 0x800,
 			    		    mlx5_regex_get_lkey(q->outputs.buff),
 							(uintptr_t)q->jobs[i].output);
 	}
