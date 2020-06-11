@@ -56,7 +56,6 @@ int mlx5_regex_simple_test(size_t num_str, int rand_pos, size_t num_jobs,
 
 	expected_matches = rte_zmalloc(NULL, sizeof(*ops)*num_jobs, 0);
 	max_matches = 254; //TODO: take from attr
-
 	memset(buf, 0, MAX_BUF_SZ);
 	uint32_t str_offset = 0;
 	for (i=0; i < num_str; i++) { 
@@ -79,6 +78,9 @@ int mlx5_regex_simple_test(size_t num_str, int rand_pos, size_t num_jobs,
 		int offset = rand_pos ? rand()%(MAX_BUF_SZ/10) : 0;
 		(*ops[i]->bufs)[0]->buf_addr = buf + offset;
 		(*ops[i]->bufs)[0]->buf_size = rand()%(MAX_BUF_SZ - offset);
+		if ((*ops[i]->bufs)[0]->buf_size == 0) {
+			(*ops[i]->bufs)[0]->buf_size = 1;
+		}
 
 		expected_matches[i] = rte_zmalloc(NULL, sizeof(struct rte_regex_match)*max_matches, 0);
 		total_matches_expected += get_expected(expected_matches[i], match_str,
@@ -143,6 +145,7 @@ int mlx5_regex_perf_test(size_t burst, const char* match_str)
 	strncpy(buf, match_str, strlen(match_str));
 	
 	for (b = 9; b <= 14; b++) {
+		
 		size_t buf_size = 1 << b;
 		printf("Runing performance test for %ld byte buffers\n", buf_size);
 		for (i = 0; i < burst; i++) {
@@ -157,10 +160,16 @@ int mlx5_regex_perf_test(size_t burst, const char* match_str)
 		}
 	
 		time_t start = clock();
-		size_t total_jobs = (1<<25);
+		size_t total_jobs = (1<<27);
 		size_t j, total_done=0, empty_polls=0, done, total_polls=0, total_sent=0;
 		for (j = 0; j < total_jobs; j+=burst) {
 			total_sent += rte_regex_enqueue_burst(0, 0, ops, burst);
+			done = rte_regex_dequeue_burst(0, 0, ops, burst);
+			empty_polls += (done ? 0 : 1);
+			total_polls++;
+			total_done +=done;
+		}
+		while (total_sent > total_done) {
 			done = rte_regex_dequeue_burst(0, 0, ops, burst);
 			empty_polls += (done ? 0 : 1);
 			total_polls++;

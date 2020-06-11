@@ -90,6 +90,7 @@ main(int argc, char **argv)
 	ret |= mlx5_regex_simple_test(100, 1, 1, match_str);
 	ret |= mlx5_regex_simple_test(10, 1, 10, match_str);
 	ret |= mlx5_regex_simple_test(100, 1, 100, match_str);
+	ret |= mlx5_regex_simple_test(100, 1, 10000, match_str);
 
 	ret |= mlx5_regex_perf_test(1024, match_str);
 
