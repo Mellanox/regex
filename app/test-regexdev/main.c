@@ -59,9 +59,10 @@ main(int argc, char **argv)
 	// do this until we understand how to add options.
 	const char *rules_db_file = argv[1];
 	const char *match_str = argv[2];
+	const char *txt_file = argv[3];
 
 	/* Initialise DPDK EAL */
-	ret = rte_eal_init(argc, argv);
+	ret = rte_eal_init(argc - 3, argv + 3);
 	if (ret < 0) {
 		rte_exit(EXIT_FAILURE, "Invalid EAL arguments!, usage: dpdk-test-regexdev [dpdk options]\n");
 	}
@@ -82,7 +83,7 @@ main(int argc, char **argv)
 	
 	rte_regex_rule_db_import(0, rules_db_file);
 
-	ret |= mlx5_regex_simple_test(1, 0, 1, match_str);
+	/*ret |= mlx5_regex_simple_test(1, 0, 1, match_str);
 	ret |= mlx5_regex_simple_test(1, 0, 10, match_str);
 	ret |= mlx5_regex_simple_test(1, 0, 100, match_str);
 	ret |= mlx5_regex_simple_test(1, 1, 1, match_str);
@@ -90,9 +91,10 @@ main(int argc, char **argv)
 	ret |= mlx5_regex_simple_test(100, 1, 1, match_str);
 	ret |= mlx5_regex_simple_test(10, 1, 10, match_str);
 	ret |= mlx5_regex_simple_test(100, 1, 100, match_str);
-	ret |= mlx5_regex_simple_test(100, 1, 10000, match_str);
+	ret |= mlx5_regex_simple_test(100, 1, 10000, match_str);*/
 
 	ret |= mlx5_regex_perf_test(64, match_str);
 
+	ret |= mlx5_regex_perf_test_file(1024, txt_file);
 	return ret;
 }
