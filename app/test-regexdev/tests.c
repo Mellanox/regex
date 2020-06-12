@@ -4,6 +4,8 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
+
 #include <signal.h>
 #include <string.h>
 
@@ -13,7 +15,9 @@
 #include <rte_regexdev.h>
 
 #include "tests.h"
-
+#ifndef min
+#define min(a,b)            (((a) < (b)) ? (a) : (b))
+#endif
 void print_raw(void*,size_t);
 
 #define MAX_BUF_SZ (1<<14)
@@ -145,7 +149,7 @@ int mlx5_regex_perf_test(size_t burst, const char* match_str)
 	memset(buf, 0, MAX_BUF_SZ);
 	strncpy(buf, match_str, strlen(match_str));
 	
-	for (b = 9; b <= 14; b++) {
+	for (b = 9; b <= 12; b++) {
 		
 		size_t buf_size = 1 << b;
 		printf("Runing performance test for %ld byte buffers\n", buf_size);
@@ -161,10 +165,111 @@ int mlx5_regex_perf_test(size_t burst, const char* match_str)
 		}
 	
 		time_t start = clock();
-		size_t total_jobs = (1<<25);
-		size_t j, total_done=0, empty_polls=0, done, total_polls=0, total_sent=0;
-		for (j = 0; j < total_jobs; j+=burst) {
-			total_sent += rte_regex_enqueue_burst(0, 0, ops, burst);
+		size_t total_jobs = (1<<20);
+		size_t total_done=0, sent_in_burst = 0, empty_polls=0, done, total_polls=0, total_sent=0;
+		while (total_sent < total_jobs) {
+			sent_in_burst += rte_regex_enqueue_burst(0, 0, ops + sent_in_burst, burst - sent_in_burst);
+			if (sent_in_burst == burst) {
+				total_sent += burst;
+				sent_in_burst = 0;
+			}
+			done = rte_regex_dequeue_burst(0, 0, ops, burst);
+			empty_polls += (done ? 0 : 1);
+			total_polls++;
+			total_done +=done;
+		}
+		while (total_sent > total_done) {
+			done = rte_regex_dequeue_burst(0, 0, ops, burst);
+			empty_polls += (done ? 0 : 1);
+			total_polls++;
+			total_done +=done;
+		}
+		time_t end = clock();
+		double time = ((double)end-start)/CLOCKS_PER_SEC;
+        printf("Empty polls=%ld, Total non-empty polls =%ld, total_sent=%ld\n", empty_polls, total_polls, total_sent);
+        printf("Time = %lf sec\n",  time);
+        printf("Perf = %lf Gbps\n", (((double)buf_size*total_done*8)/time)/1000000000.0);
+	}
+	
+	if (ret < 0)
+		printf("test FAILED\n");
+	return ret;
+}
+
+ static char* read_file(const char* name, size_t *len) {
+  
+          /* declare a file pointer */
+          FILE    *infile;
+          char    *buffer;
+          long    numbytes;
+  
+          /* open an existing file for reading */
+          infile = fopen(name, "r");
+  
+          /* quit if the file does not exist */
+          if(infile == NULL)
+                      return NULL;
+  
+          /* Get the number of bytes */
+          fseek(infile, 0L, SEEK_END);
+          numbytes = ftell(infile);
+          *len = numbytes;
+          /* reset the file position indicator to 
+           * the beginning of the file */
+          fseek(infile, 0L, SEEK_SET);
+  
+          /* grab sufficient memory for the 
+           * buffer to hold the text */
+          buffer = (char*)rte_calloc(__func__, numbytes, sizeof(char), 0x1000);
+  
+          /* memory error */
+          if(buffer == NULL)
+                      return NULL;
+  
+          /* copy all the text into the buffer */
+          fread(buffer, sizeof(char), numbytes, infile);
+          fclose(infile);
+  
+          //printf("The file called test.dat contains this text\n\n%s", buffer);
+          return buffer;
+  }
+
+int mlx5_regex_perf_test_file(size_t burst, const char* file)
+{
+	struct rte_regex_ops **ops = rte_zmalloc(NULL, sizeof(*ops)*burst, 0);
+	struct sw_job *sw_jobs = rte_zmalloc(NULL, sizeof(*sw_jobs)*burst, 0);
+	size_t file_len;
+	size_t i, b;
+	size_t max_matches;
+	int ret = 0;
+
+	char* buf = read_file(file, &file_len);
+	max_matches = 254; //TODO: take from attr
+	
+	for (b = 9; b <= 12; b++) {
+		
+		size_t buf_size = 1 << b;
+		printf("Runing performance test for %ld byte buffers\n", buf_size);
+		for (i = 0; i < burst; i++) {
+			ops[i] = rte_zmalloc(NULL, sizeof(*ops[0]) + sizeof(struct rte_regex_match)*max_matches, 0);
+	   	    	sw_jobs[i].iov[0] = rte_zmalloc(NULL, sizeof(* sw_jobs[i].iov[0]), 0);
+			ops[i]->bufs = &sw_jobs[i].iov;
+			ops[i]->num_of_bufs = 1;
+			ops[i]->group_id0 = 1;
+			ops[i]->user_id = i;
+			(*ops[i]->bufs)[0]->buf_addr = buf + (i*buf_size)%file_len;
+			(*ops[i]->bufs)[0]->buf_size = min(buf_size, file_len - (i*buf_size)%file_len);
+		}
+	
+		time_t start = clock();
+		size_t total_jobs = (1<<20);
+		size_t total_done=0, sent_in_burst=0, empty_polls=0, done, total_polls=0, total_sent=0;
+		while (total_sent < total_jobs) {
+			sent_in_burst += rte_regex_enqueue_burst(0, 0, ops + sent_in_burst, burst -sent_in_burst );
+			if (sent_in_burst == burst) {
+				total_sent += burst;
+				sent_in_burst = 0;
+			}
 			done = rte_regex_dequeue_burst(0, 0, ops, burst);
 			empty_polls += (done ? 0 : 1);
 			total_polls++;
