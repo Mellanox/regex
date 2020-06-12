@@ -22,7 +22,27 @@
 #include "rxp-csrs.h"
 #include "rxp-api.h"
 
-#define MLX5_REGEX_RESP_SZ 8
+static inline void
+prep_one(struct mlx5_regex_sq *sq, struct rte_regex_ops *op,
+		 struct mlx5_regex_job *job)
+{
+	memcpy(job->input,
+			(*op->bufs)[0]->buf_addr,
+			(*op->bufs)[0]->buf_size);
+
+	size_t wqe_offset = (sq->pi % SQ_SIZE) * MLX5_SEND_WQE_BB;
+	uint8_t *wqe = (uint8_t *)sq->wq_buff + wqe_offset;
+	
+	mlx5dv_set_ctrl_seg((struct mlx5_wqe_ctrl_seg *)wqe, sq->pi, MLX5_OPCODE_MMO,
+			MLX5_OPC_MOD_MMO_REGEX, sq->qpn,
+			0, 4, 0, 0);
+	
+	mlx5_regex_set_ctrl_seg(wqe+12, 0, op->group_id0, op->group_id1,
+						    op->group_id2, op->group_id3, 0);
+
+	struct mlx5_wqe_data_seg *input_seg = (struct mlx5_wqe_data_seg *)(wqe+32);
+	input_seg->byte_count = htobe32((*op->bufs)[0]->buf_size);
+}
 /**
  * DPDK callback for enqueue.
  *
@@ -51,7 +71,6 @@ mlx5_regex_dev_enqueue(struct rte_regex_dev *dev, uint16_t qp_id,
 	struct rte_regex_ops *op; 
 	int sent = 0;
 	struct mlx5_regex_job *job;
-	uint16_t subset[4];
 	uint32_t job_id;
 	job_id = (queue->pi)%MLX5_REGEX_MAX_JOBS;
 	struct mlx5_regex_sq *sq = &queue->ctx->qps[mlx5_regex_job2queue(job_id)];
@@ -62,35 +81,10 @@ mlx5_regex_dev_enqueue(struct rte_regex_dev *dev, uint16_t qp_id,
 		op = ops[i];
 		job = &queue->jobs[job_id];
 
-		memcpy(job->input,
-			    (*op->bufs)[0]->buf_addr,
-			    (*op->bufs)[0]->buf_size);
-
-		subset[0] = op->group_id0;
-		subset[1] = op->group_id1;
-		subset[2] = op->group_id2;
-		subset[3] = op->group_id3;
-
-		size_t wqe_offset = (sq->pi % SQ_SIZE) * MLX5_SEND_WQE_BB;
-		uint8_t *wqe = (uint8_t *)sq->wq_buff + wqe_offset;
-		mlx5_regex_set_ctrl_seg(&job->regex_ctrl, 0,
-                                subset, 0);
-
-		mlx5dv_set_ctrl_seg((struct mlx5_wqe_ctrl_seg *)wqe, sq->pi, MLX5_OPCODE_MMO,
-			    MLX5_OPC_MOD_MMO_REGEX, sq->qpn,
-			    0, 4, 0,
-			    job->regex_ctrl.le_subset_id_0_subset_id_1);
+		prep_one(sq, op, job);
 		
-		struct mlx5_wqe_data_seg *input_seg = (struct mlx5_wqe_data_seg *)(wqe+32);
-		input_seg->byte_count = htobe32((*op->bufs)[0]->buf_size);
-
-		struct mlx5_wqe_metadata_seg *meta_seg = (struct mlx5_wqe_metadata_seg *)(wqe+16);
-		meta_seg->mmo_control_31_0 = htobe32(job->regex_ctrl.ctrl_subset_id_2_subset_id_3);
-
 		sq->db_pi = sq->pi;
 		sq->pi = (sq->pi+1)%MAX_WQE_INDEX;
-
-		
 
 		queue->jobs[queue->pi % MLX5_REGEX_MAX_JOBS].user_id =
 			op->user_id; 
@@ -103,6 +97,8 @@ mlx5_regex_dev_enqueue(struct rte_regex_dev *dev, uint16_t qp_id,
 		struct mlx5_regex_sq *last_sq = sq;
 		sq = &queue->ctx->qps[mlx5_regex_job2queue(job_id)];
 		if (unlikely(sq!=last_sq) || (i == (nb_ops -1)) || (last_sq->db_pi%32)) {
+			size_t wqe_offset = (last_sq->db_pi % SQ_SIZE) * MLX5_SEND_WQE_BB;
+			uint8_t *wqe = (uint8_t *)last_sq->wq_buff + wqe_offset;
 			((struct mlx5_wqe_ctrl_seg *)wqe)->fm_ce_se = MLX5_WQE_CTRL_CQ_UPDATE;
 			uint64_t *doorbell_addr = (uint64_t *)((uint8_t *)queue->ctx->uar->base_addr + 0x800);
 			rte_cio_wmb();
@@ -116,6 +112,8 @@ mlx5_regex_dev_enqueue(struct rte_regex_dev *dev, uint16_t qp_id,
 
 	return sent;
 }
+
+#define MLX5_REGEX_RESP_SZ 8
 
 /**
  * DPDK callback for dequeue.

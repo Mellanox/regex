@@ -71,14 +71,15 @@ struct mlx5_database_ctx {
 // This function should be used in order to pack the segment correctly
 static MLX5DV_ALWAYS_INLINE
 void mlx5_regex_set_ctrl_seg(void *seg,
-			     uint8_t le, uint16_t subset_id[4], uint8_t ctrl)
+			     uint8_t le, uint16_t subset_id0, uint16_t subset_id1,
+				 uint16_t subset_id2, uint16_t subset_id3, uint8_t ctrl)
 {
 	DEVX_SET(regexp_mmo_control, seg, le, le);
 	DEVX_SET(regexp_mmo_control, seg, ctrl, ctrl);
-	DEVX_SET(regexp_mmo_control, seg, subset_id_0, subset_id[0]);
-	DEVX_SET(regexp_mmo_control, seg, subset_id_1, subset_id[1]);
-	DEVX_SET(regexp_mmo_control, seg, subset_id_2, subset_id[2]);
-	DEVX_SET(regexp_mmo_control, seg, subset_id_3, subset_id[3]);
+	DEVX_SET(regexp_mmo_control, seg, subset_id_0, subset_id0);
+	DEVX_SET(regexp_mmo_control, seg, subset_id_1, subset_id1);
+	DEVX_SET(regexp_mmo_control, seg, subset_id_2, subset_id2);
+	DEVX_SET(regexp_mmo_control, seg, subset_id_3, subset_id3);
 }
 
 // This function should be used in order to pack the segment correctly

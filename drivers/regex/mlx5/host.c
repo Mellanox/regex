@@ -1095,8 +1095,8 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
              * Note: joblen taken from input data seg and ctrl field mapped
              *       above.  JobId not used in Mlnx API so stored above.
              */
-            mlx5_regex_set_ctrl_seg(&rxp_queue->sq_buf[i].ctrl_seg, 0,
-                                    job->subset, tmp_ctrl);
+            //mlx5_regex_set_ctrl_seg(&rxp_queue->sq_buf[i].ctrl_seg, 0,
+            //                        job->subset, tmp_ctrl);
 
             /* Copy job data into input ptr */
             memcpy(rxp_queue->sq_buf[i].input_p,
