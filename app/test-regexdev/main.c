@@ -83,7 +83,7 @@ main(int argc, char **argv)
 	
 	rte_regex_rule_db_import(0, rules_db_file);
 
-	/*ret |= mlx5_regex_simple_test(1, 0, 1, match_str);
+	ret |= mlx5_regex_simple_test(1, 0, 1, match_str);
 	ret |= mlx5_regex_simple_test(1, 0, 10, match_str);
 	ret |= mlx5_regex_simple_test(1, 0, 100, match_str);
 	ret |= mlx5_regex_simple_test(1, 1, 1, match_str);
@@ -91,10 +91,10 @@ main(int argc, char **argv)
 	ret |= mlx5_regex_simple_test(100, 1, 1, match_str);
 	ret |= mlx5_regex_simple_test(10, 1, 10, match_str);
 	ret |= mlx5_regex_simple_test(100, 1, 100, match_str);
-	ret |= mlx5_regex_simple_test(100, 1, 10000, match_str);*/
+	ret |= mlx5_regex_simple_test(100, 1, 10000, match_str);
 
-	ret |= mlx5_regex_perf_test(64, match_str);
+	ret |= mlx5_regex_perf_test(16*16, match_str);
 
-	ret |= mlx5_regex_perf_test_file(1024, txt_file);
+	ret |= mlx5_regex_perf_test_file(16*16*4, txt_file);
 	return ret;
 }
