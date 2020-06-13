@@ -22,8 +22,6 @@ struct mlx5_regex_wqe_ctrl_seg {
 
 
 #define MAX_WQE_INDEX (1<<16)
-#define LOG_CQ_SIZE (LOG_SQ_SIZE)
-#define CQ_SIZE (1<<LOG_CQ_SIZE)
 
 int mlx5_regex_logtype;
 
@@ -39,17 +37,17 @@ struct mlx5_regex_cq {
 	volatile uint8_t *cq_buff;
 	unsigned int ci;
 	struct mlx5dv_devx_obj *devx_obj;
+	size_t cq_size;
 };
 
 struct mlx5_regex_sq {
 	int qpn;
 	struct mlx5dv_devx_obj *devx_obj;
 	uint32_t *qp_dbr;
-	struct mlx5_regex_cq cq;
 	void* wq_buff;
 	unsigned int pi;
+	unsigned int ci;
 	unsigned int db_pi;
-	uint16_t last_wqe_counter;
 };
 
 struct mlx5_regex_ctx {
@@ -61,6 +59,7 @@ struct mlx5_regex_ctx {
 	uint32_t eq;
 	void *eq_buff;
 	struct mlx5dv_devx_uar *uar;
+	struct mlx5_regex_cq cq;
 	int uuar;
 };
 struct mlx5_database_ctx {
@@ -141,33 +140,6 @@ int mlx5_regex_engine_stop(struct ibv_context *ctx, int engine_id);
  */
 int mlx5_regex_engine_resume(struct ibv_context *ctx, int engine_id);
 
-/*
- * Sends work to queue.
- * This function can be called multiple times per qid.
- * Completions will return in order per sq.
- * This call is thread safe per SQ.
- */
-int mlx5_regex_prep_work(struct mlx5_regex_ctx *ctx,
-			 struct mlx5_regex_wqe_ctrl_seg *seg,
-			 volatile uint8_t* metadata_p,  uint32_t lkey,
-			 struct mlx5_wqe_data_seg *input,
-			 struct mlx5_wqe_data_seg *output,
-			 unsigned int sq, int req_cqe);
-
-
-int mlx5_regex_send_work(struct mlx5_regex_ctx *ctx, unsigned int sq);
-/*
- * Send NOP on WQE, will do nothing.
- */
-int mlx5_regex_send_nop(struct mlx5_regex_ctx *ctx,
-			unsigned int sq);
-
-/*
- * Polls for completion of a job posted on a queue.
- * This function is non-blocking.
- * Returns work_id in case of success. -1 in case of error, 0 if no completion
- */
-int mlx5_regex_poll(struct mlx5_regex_ctx *ctx, unsigned int sq);
 
 struct mlx5_regex_buff;
 

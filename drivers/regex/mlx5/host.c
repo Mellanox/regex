@@ -1119,12 +1119,12 @@ size_t mlnx_submit_job(struct rxp_queue *rxp_queue,
 				(uintptr_t)rxp_queue->sq_buf[i].metadata_p);
 
             /* Return work_id, or -1 in case of err */
-            rxp_queue->sq_buf[i].work_id = mlx5_regex_prep_work(
+          /*  rxp_queue->sq_buf[i].work_id = mlx5_regex_prep_work(
                                 rxp_queue->rxp_job_ctx,
                                 &rxp_queue->sq_buf[i].ctrl_seg,
                                 rxp_queue->sq_buf[i].metadata_p,  mlx5_regex_get_lkey(rxp_queue->sq_buf[i].metadata_buff),
 				&rxp_queue->sq_buf[i].input_seg,
-                                &rxp_queue->sq_buf[i].output_seg, i%NUM_SQS, 1);
+                                &rxp_queue->sq_buf[i].output_seg, i%NUM_SQS, 1);*/
 
 		
 		/*printf("Metadata\n");
@@ -1197,7 +1197,7 @@ int mlnx_poll(struct rxp_queue *rxp_queue, bool *rx_ready, bool *tx_ready)
         {
             //TODO: Check if can simply use work_id = "i", not sure if work_id
             //      maps SQ's if only 1 job per SQ!?
-            ret = mlx5_regex_poll(rxp_queue->rxp_job_ctx, i);
+            //ret = mlx5_regex_poll(rxp_queue->rxp_job_ctx, i);
 
             /* 1 = response waiting, 0 = no completion, -1 = error */
             if (ret > 0)

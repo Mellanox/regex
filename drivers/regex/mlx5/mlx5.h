@@ -36,11 +36,11 @@ struct mlx5_regex_job {
 	struct mlx5_regex_wqe_ctrl_seg regex_ctrl;
 } __rte_cached_aligned;
 
-/*static uint32_t
-mlx5_regex_job_id_get(uint32_t queue, uint32_t entry) {
-	return (queue - 1)*MLX5_REGEX_SQ_SIZE + entry;
+static inline uint32_t
+mlx5_regex_job_id_get(uint32_t qid, uint32_t entry) {
+	return qid*MLX5_REGEX_SQ_SIZE + entry;
 }
-*/
+
 
 static inline uint32_t
 mlx5_regex_job2queue(uint32_t job_id) {
@@ -69,6 +69,7 @@ struct mlx5_regex_queues {
 	uint32_t job_cnt;
 	uint32_t pi;
 	uint32_t ci;
+	uint32_t free_sqs;
 	struct mlx5_regex_ctx *ctx;
 	struct rxp_response_batch resp_ctx;
 	struct mlx5_regex_job jobs[MLX5_REGEX_MAX_JOBS];

@@ -15,6 +15,7 @@
 #include <mlx5_glue.h>
 #include <mlx5_common.h>
 #include <mlx5_prm.h>
+#include <strings.h>
 
 #include "mlx5.h"
 #include "mlx5_regex.h"
@@ -42,6 +43,30 @@ prep_one(struct mlx5_regex_sq *sq, struct rte_regex_ops *op,
 
 	struct mlx5_wqe_data_seg *input_seg = (struct mlx5_wqe_data_seg *)(wqe+32);
 	input_seg->byte_count = htobe32((*op->bufs)[0]->buf_size);
+
+	job->user_id = op->user_id;
+	sq->db_pi = sq->pi;
+	sq->pi = (sq->pi+1)%MAX_WQE_INDEX;
+}
+
+static inline void
+send_doorbell(struct mlx5_regex_sq *sq, struct mlx5_regex_queues *queue) {
+	size_t wqe_offset = (sq->db_pi % SQ_SIZE) * MLX5_SEND_WQE_BB;
+	uint8_t *wqe = (uint8_t *)sq->wq_buff + wqe_offset;
+	((struct mlx5_wqe_ctrl_seg *)wqe)->fm_ce_se = MLX5_WQE_CTRL_CQ_UPDATE;
+	uint64_t *doorbell_addr = (uint64_t *)((uint8_t *)queue->ctx->uar->base_addr + 0x800);
+	rte_cio_wmb();
+	sq->qp_dbr[MLX5_SND_DBR] = htobe32(sq->db_pi);
+	rte_wmb();
+	*doorbell_addr = *(volatile uint64_t *)wqe;
+	rte_wmb();
+}
+
+static inline int
+can_send(struct mlx5_regex_sq *sq) {
+	return unlikely(sq->ci > sq->pi) ?
+			MAX_WQE_INDEX + sq->pi - sq->ci < SQ_SIZE: 
+			sq->pi - sq->ci < SQ_SIZE;
 }
 /**
  * DPDK callback for enqueue.
@@ -67,53 +92,74 @@ mlx5_regex_dev_enqueue(struct rte_regex_dev *dev, uint16_t qp_id,
 						    struct mlx5_regex_priv,
 						    regex_dev);
 	struct mlx5_regex_queues *queue = &priv->queues[qp_id];
- 	int i;
-	struct rte_regex_ops *op; 
-	int sent = 0;
-	struct mlx5_regex_job *job;
-	uint32_t job_id;
-	job_id = (queue->pi)%MLX5_REGEX_MAX_JOBS;
-	struct mlx5_regex_sq *sq = &queue->ctx->qps[mlx5_regex_job2queue(job_id)];
-	//printf(" pi = %d, ci = %d\n",  queue->pi, queue->ci);
-	for (i = 0; i < nb_ops; i++) {
-		if (unlikely((queue->pi - queue->ci) >= MLX5_REGEX_MAX_JOBS))
-			break;
-		op = ops[i];
-		job = &queue->jobs[job_id];
+	struct mlx5_regex_sq *sq;
+	size_t qid, job_id, i = 0;
 
-		prep_one(sq, op, job);
-		
-		sq->db_pi = sq->pi;
-		sq->pi = (sq->pi+1)%MAX_WQE_INDEX;
-
-		queue->jobs[queue->pi % MLX5_REGEX_MAX_JOBS].user_id =
-			op->user_id; 
-		queue->jobs[queue->pi % MLX5_REGEX_MAX_JOBS].used = 1;
-		sent++;
-		queue->pi++;
-
-		job_id = (queue->pi)%MLX5_REGEX_MAX_JOBS;
-		
-		struct mlx5_regex_sq *last_sq = sq;
-		sq = &queue->ctx->qps[mlx5_regex_job2queue(job_id)];
-		if (unlikely(sq!=last_sq) || (i == (nb_ops -1)) || (last_sq->db_pi%32)) {
-			size_t wqe_offset = (last_sq->db_pi % SQ_SIZE) * MLX5_SEND_WQE_BB;
-			uint8_t *wqe = (uint8_t *)last_sq->wq_buff + wqe_offset;
-			((struct mlx5_wqe_ctrl_seg *)wqe)->fm_ce_se = MLX5_WQE_CTRL_CQ_UPDATE;
-			uint64_t *doorbell_addr = (uint64_t *)((uint8_t *)queue->ctx->uar->base_addr + 0x800);
-			rte_cio_wmb();
-			last_sq->qp_dbr[MLX5_SND_DBR] = htobe32(last_sq->db_pi);
-			rte_wmb();
-			*doorbell_addr = *(volatile uint64_t *)wqe;
-			rte_wmb();
-			queue->ctx->uuar = !queue->ctx->uuar;
+	while ((qid = ffs(queue->free_sqs))) {
+		qid--; //ffs returns 1 for bit 0
+		sq = &queue->ctx->qps[qid];
+		while (can_send(sq)) {
+			job_id = mlx5_regex_job_id_get(qid, sq->pi%SQ_SIZE);
+			prep_one(sq, ops[i], &queue->jobs[job_id]);
+			i++;
+			if (unlikely(i == nb_ops)) {
+				send_doorbell(sq, queue);
+				goto out;
+			}
 		}
+		queue->free_sqs &= ~(1 << qid);
+		send_doorbell(sq, queue);
 	}
 
-	return sent;
+out:
+	queue->pi++;
+	return i;
 }
 
 #define MLX5_REGEX_RESP_SZ 8
+static inline void
+extract_result(struct rte_regex_ops *op, struct mlx5_regex_job *job)
+{
+	size_t j, offset;
+	op->user_id = job->user_id;
+	op->nb_matches = DEVX_GET(regexp_metadata, job->metadata + 32, match_count);
+	op->nb_actual_matches = DEVX_GET(regexp_metadata, job->metadata +32,
+									 detected_match_count);
+	for (j = 0; j < op->nb_matches; j++) {
+		offset = MLX5_REGEX_RESP_SZ * j;
+		op->matches[j].group_id =
+			DEVX_GET(regexp_match_tuple, (job->output + offset), rule_id);
+		op->matches[j].offset =
+			DEVX_GET(regexp_match_tuple, (job->output +  offset), start_ptr);
+		op->matches[j].len =
+			DEVX_GET(regexp_match_tuple, (job->output +  offset), length);
+	}
+}
+
+static inline volatile struct mlx5_cqe*
+poll_one(struct mlx5_regex_cq* cq)
+{
+	volatile struct mlx5_cqe *cqe;
+	size_t next_cqe_offset;
+
+	next_cqe_offset =  (cq->ci % cq->cq_size) * sizeof(*cqe);
+	cqe = (volatile struct mlx5_cqe *)(cq->cq_buff + next_cqe_offset);
+    rte_cio_wmb();
+
+	int ret = check_cqe(cqe, cq->cq_size, cq->ci);
+
+	if (unlikely (ret == MLX5_CQE_STATUS_ERR)) {
+		DRV_LOG(ERR, "Completion with error on qp 0x%x",  0);
+		exit(-1);
+	}
+
+	if (unlikely (ret != MLX5_CQE_STATUS_SW_OWN))
+		return NULL;
+		
+	return cqe;
+
+}
+
 
 /**
  * DPDK callback for dequeue.
@@ -138,61 +184,33 @@ mlx5_regex_dev_dequeue(struct rte_regex_dev *dev, uint16_t qp_id,
 						    struct mlx5_regex_priv,
 						    regex_dev);
 	struct mlx5_regex_queues *queue = &priv->queues[qp_id];
- 	int i;
-	struct rte_regex_ops *op; 
-	int rec = 0;
-	int j;
-	int offset;
+	struct mlx5_regex_cq *cq = &queue->ctx->cq;
+	volatile struct mlx5_cqe *cqe;
+ 	size_t i = 0;
 
-	for (i = 0; i < nb_ops;) {
-		uint32_t job_id = (queue->ci)%MLX5_REGEX_MAX_JOBS;
-		int ret = 0;
-		
-		ret = mlx5_regex_poll(queue->ctx, mlx5_regex_job2queue(job_id));
-
-		if (ret < 0) {
-			//printf("CQE error\n");
-			break;
-		}
-
-		if (ret == 0)
-			break;
-		int c = 0;
-		for (c = 0; c < ret; c++) {
-			uint32_t job_id = (queue->ci)%MLX5_REGEX_MAX_JOBS;
-			struct mlx5_regex_job *job = &queue->jobs[job_id];
-			op = ops[i];
-			op->user_id = job->user_id;
-			//printf("jobid = %d, job->user_id)=%ld size=%ld\n", job_id, job->user_id, sizeof(struct rxp_response_desc));
-			op->nb_matches = DEVX_GET(regexp_metadata, job->metadata + 32, match_count);
-			op->nb_actual_matches = DEVX_GET(regexp_metadata, job->metadata +32,
-							detected_match_count);
-			//print_raw(job->output, 1);
-			for (j = 0; j < op->nb_matches; j++) {
-				offset = MLX5_REGEX_RESP_SZ * j;
-				op->matches[j].group_id = DEVX_GET(regexp_match_tuple, 
-								(job->output + offset), rule_id);
-				op->matches[j].offset = DEVX_GET(regexp_match_tuple, 
-								(job->output +  offset), start_ptr);
-				op->matches[j].len = DEVX_GET(regexp_match_tuple, 
-								(job->output +  offset), length);
+	while ((cqe = poll_one(cq))) {
+		uint16_t wq_counter = (be16toh(cqe->wqe_counter) + 1)%MAX_WQE_INDEX;
+		size_t qid = cqe->rsvd3[2];
+		struct mlx5_regex_sq *sq = &queue->ctx->qps[qid];
+		while (sq->ci != wq_counter) {
+			if (unlikely(i == nb_ops)) {
+				/* Return without updating cq->ci */
+				goto out;
 			}
-			job->used = 0;
-			rec++;
-			queue->ci++;
-			
+			uint32_t job_id = mlx5_regex_job_id_get(qid, sq->ci%SQ_SIZE);
+			extract_result(ops[i], &queue->jobs[job_id]);
+			sq->ci = (sq->ci+1)%MAX_WQE_INDEX;
 			i++;
-			if (mlx5_regex_job2queue(job_id) != mlx5_regex_job2queue((queue->ci)%MLX5_REGEX_MAX_JOBS))
-				break;
 		}
+		cq->ci = (cq->ci + 1) & 0xffffff;
+		asm volatile("" ::: "memory");
+		cq->cq_dbr[0] = htobe32(cq->ci);
+		queue->free_sqs |= (1 << qid);
 	}
-//exit:
-//	for (; queue->ci < queue->pi; queue->ci++) {
-//		/*if (queue->jobs[res->header.job_id].used == 1)
-//			break;*/
-//	}
-	//printf("rec = %d\n", rec);
-	return rec;
+
+out:
+	queue->ci += i;
+	return i;
 }
 
 struct regex_wqe {
@@ -215,7 +233,7 @@ void mlx5dv_set_metadata_seg(struct mlx5_wqe_metadata_seg *seg,
 int
 mlx5_regex_dev_fastpath_prep(struct mlx5_regex_priv *priv, uint16_t qp_id) {
 	struct mlx5_regex_queues *queue = &priv->queues[qp_id];
- 	int qid, entry;
+ 	size_t qid, entry;
 	uint32_t job_id;
 	for (qid = 0; qid < MLX5_REGEX_NUM_SQS; qid++) {
 		uint8_t* wqe = (uint8_t*)queue->ctx->qps[qid].wq_buff;
@@ -242,6 +260,7 @@ mlx5_regex_dev_fastpath_prep(struct mlx5_regex_priv *priv, uint16_t qp_id) {
 			wqe += 64;
 
 		}
+		queue->free_sqs |= 1 << qid;
 	}
 	return 0;
 }
