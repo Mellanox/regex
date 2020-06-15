@@ -93,8 +93,7 @@ static struct rxp_mlnx_dev rxp;
 //TODO: Check within Incremental mode if safe to virgin program in Shared mode,
 //      then to do incremental update in Private mode? Should be ok! Double check!
 /* Set programming mode default to shared */
-static enum rxp_program_mode rxp_prog_mode = RXP_PRIVATE_PROG_MODE;
-                                             //RXP_SHARED_PROG_MODE;
+static enum rxp_program_mode rxp_prog_mode = RXP_SHARED_PROG_MODE;
 
 /* ***************************************************************** */
 /* ***************** Private Func Declarations ********************* */
