@@ -47,6 +47,7 @@ mlx5_regex_info_get(struct rte_regexdev *dev __rte_unused,
 	info->max_groups = MLX5_REGEX_MAX_GROUPS;
 	info->regexdev_capa = RTE_REGEXDEV_SUPP_PCRE_GREEDY_F;
 	info->rule_flags = 0;
+	info->max_queue_pairs = 10;
 	return 0;
 }
 
@@ -562,6 +563,7 @@ mlx5_regex_configure(struct rte_regexdev *dev,
 	uint8_t id;
 
 	priv->nb_queues = cfg->nb_queue_pairs;
+	dev->data->dev_conf.nb_queue_pairs = priv->nb_queues;
 	priv->qps = rte_zmalloc(NULL, sizeof(struct mlx5_regex_qp) *
 				priv->nb_queues, 0);
 	if (!priv->nb_queues) {

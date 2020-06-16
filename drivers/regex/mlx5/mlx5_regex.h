@@ -5,16 +5,38 @@
 #ifndef MLX5_REGEX_H
 #define MLX5_REGEX_H
 
+#ifdef PEDANTIC
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
+#include <infiniband/verbs.h>
+#include <infiniband/mlx5dv.h>
+#ifdef PEDANTIC
+#pragma GCC diagnostic error "-Wpedantic"
+#endif
+
+#include <mlx5_common.h>
+
 #include "mlx5_rxp.h"
 
 struct mlx5_regex_sq {
 	uint32_t nb_desc; /* Number of desc for this object. */
 };
 
+struct mlx5_regex_cq {
+	uint32_t log_nb_desc; /* Log 2 number of desc for this object. */
+	struct mlx5_devx_obj *obj; /* The CQ DevX object. */
+	int64_t dbr_offset; /* Door bell record offset. */
+	uint32_t dbr_umem; /* Door bell record umem id. */
+	volatile struct mlx5_cqe *cqe; /* The CQ ring buffer. */
+	struct mlx5dv_devx_umem *cqe_umem; /* CQ buffer umem. */
+};
+
 struct mlx5_regex_qp {
 	uint32_t flags; /* QP user flags. */
 	uint32_t nb_desc; /* Total number of desc for thsi qp. */
 	struct mlx5_regex_sq *sqs; /* Pointer to sq array. */
+	uint16_t nb_obj; /* Number of sq objects. */
+	struct mlx5_regex_cq cq; /* CQ struct. */
 };
 
 struct mlx5_regex_db {
@@ -37,6 +59,10 @@ struct mlx5_regex_priv {
 	uint16_t nb_max_matches; /* Max number of matches. */
 	struct mlx5_regex_db db[MLX5_RXP_MAX_ENGINES +
 				MLX5_RXP_SHADOW_EM_COUNT];
+	struct mlx5_dbr_page_list dbrpgs; /* Door-bell pages. */
+	uint32_t eqn; /* EQ number. */
+	struct mlx5dv_devx_uar *uar; /* UAR object. */
+
 };
 
 /* mlx5_rxp.c */
@@ -44,5 +70,6 @@ int mlx5_regex_info_get(struct rte_regexdev *dev,
 			struct rte_regexdev_info *info);
 int mlx5_regex_configure(struct rte_regexdev *dev,
 			 const struct rte_regexdev_config *cfg);
-
+int mlx5_regex_qp_setup(struct rte_regexdev *dev, uint16_t qp_ind,
+			const struct rte_regexdev_qp_conf *cfg);
 #endif /* MLX5_REGEX_H */
