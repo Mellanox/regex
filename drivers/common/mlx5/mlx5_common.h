@@ -15,6 +15,7 @@
 #include <rte_devargs.h>
 
 #include "mlx5_prm.h"
+#include "mlx5_devx_cmds.h"
 
 
 /* Bit-field manipulation. */
@@ -207,13 +208,19 @@ enum mlx5_class {
 	MLX5_CLASS_INVALID,
 };
 
+LIST_HEAD(mlx5_dbr_page_list, mlx5_devx_dbr_page);
+
 __rte_internal
 enum mlx5_class mlx5_class_get(struct rte_devargs *devargs);
 __rte_internal
 void mlx5_translate_port_name(const char *port_name_in,
 			      struct mlx5_switch_info *port_info_out);
 void mlx5_glue_constructor(void);
-
+uint32_t mlx5_os_get_umem_id(void *umem);
+int64_t mlx5_get_dbr(struct ibv_context *ctx,  struct mlx5_dbr_page_list *head,
+		     struct mlx5_devx_dbr_page **dbr_page);
+int32_t mlx5_release_dbr(struct mlx5_dbr_page_list *head, uint32_t umem_id,
+			 uint64_t offset);
 extern uint8_t haswell_broadwell_cpu;
 
 #endif /* RTE_PMD_MLX5_COMMON_H_ */

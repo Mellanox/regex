@@ -9,6 +9,21 @@
 #include "mlx5_prm.h"
 
 
+#define MLX5_DBR_PAGE_SIZE 4096 /* Must be >= 512. */
+#define MLX5_DBR_SIZE 8
+#define MLX5_DBR_PER_PAGE (MLX5_DBR_PAGE_SIZE / MLX5_DBR_SIZE)
+#define MLX5_DBR_BITMAP_SIZE (MLX5_DBR_PER_PAGE / 64)
+
+struct mlx5_devx_dbr_page {
+	/* Door-bell records, must be first member in structure. */
+	uint8_t dbrs[MLX5_DBR_PAGE_SIZE];
+	LIST_ENTRY(mlx5_devx_dbr_page) next; /* Pointer to the next element. */
+	void *umem;
+	uint32_t dbr_count; /* Number of door-bell records in use. */
+	/* 1 bit marks matching door-bell is in use. */
+	uint64_t dbr_bitmap[MLX5_DBR_BITMAP_SIZE];
+};
+
 /* devX creation object */
 struct mlx5_devx_obj {
 	void *obj; /* The DV object. */
