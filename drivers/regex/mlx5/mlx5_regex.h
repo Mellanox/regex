@@ -19,8 +19,7 @@
 #include "mlx5_rxp.h"
 
 struct mlx5_regex_sq {
-	uint32_t nb_desc; /* Number of desc for this object. */
-	uint16_t pi; /* SQ producer index. */
+	uint16_t log_nb_desc; /* Log 2 number of desc for this object. */
 	struct mlx5_devx_obj *obj; /* The SQ DevX object. */
 	int64_t dbr_offset; /* Door bell record offset. */
 	uint32_t dbr_umem; /* Door bell record umem id. */
@@ -39,7 +38,7 @@ struct mlx5_regex_cq {
 
 struct mlx5_regex_qp {
 	uint32_t flags; /* QP user flags. */
-	uint32_t nb_desc; /* Total number of desc for thsi qp. */
+	uint16_t nb_desc; /* Total number of desc for this qp. */
 	struct mlx5_regex_sq *sqs; /* Pointer to sq array. */
 	uint16_t nb_obj; /* Number of sq objects. */
 	struct mlx5_regex_cq cq; /* CQ struct. */
