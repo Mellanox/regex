@@ -6,6 +6,7 @@
 #define RTE_PMD_MLX5_REGEX_RXP_H_
 
 #define MLX5_RXP_MAX_JOB_LENGTH	16384
+#define MLX5_RXP_MAX_SUBSETS	 4095
 
 #define MLX5_RXP_CTRL_TYPE_MASK	7
 #define MLX5_RXP_CTRL_TYPE_JOB_DESCRIPTOR 0
@@ -33,11 +34,7 @@
 #define MLX5_RXP_RESP_STATUS_PMI_SOJ (1 << 13)
 #define MLX5_RXP_RESP_STATUS_PMI_EOJ (1 << 14)
 
-#define MLX5_RXP_SUBSET_ID_MAX 65535
-
-/*
- * This describes the header the RXP expects for any search data.
- */
+/* This describes the header the RXP expects for any search data. */
 struct mlx5_rxp_job_desc {
 	uint32_t job_id;
 	uint16_t ctrl;
@@ -56,7 +53,6 @@ struct mlx5_rxp_response_desc {
 	uint16_t pmi_min_byte_ptr;
 }  __attribute__ ((__packed__));
 
-//New 64bit match tuple for Mellanox
 struct mlx5_rxp_match_tuple {
 	uint32_t rule_id;
 	uint16_t start_ptr;
@@ -68,20 +64,27 @@ struct mlx5_rxp_response {
 	struct mlx5_rxp_match_tuple matches[0];
 };
 
-#define MLX5_RXP_MAX_MATCHES 254
+#define MLX5_RXP_MAX_MATCHES                    254
 
-#define MLX5_RXP_CTL_RULES_PGM	1
-#define MLX5_RXP_CTL_RULES_PGM_INCR	2
+#define MLX5_RXP_CTL_RULES_PGM	                1
+#define MLX5_RXP_CTL_RULES_PGM_INCR	        2
 
-#define MLX5_RXP_ROF_ENTRY_INST            0
-#define MLX5_RXP_ROF_ENTRY_EQ              1
-#define MLX5_RXP_ROF_ENTRY_GTE             2
-#define MLX5_RXP_ROF_ENTRY_LTE             3
-#define MLX5_RXP_ROF_ENTRY_CHECKSUM        4
-#define MLX5_RXP_ROF_ENTRY_CHECKSUM_EX_EM  5
-#define MLX5_RXP_ROF_ENTRY_IM              6
-#define MLX5_RXP_ROF_ENTRY_EM              7
-#define MLX5_RXP_ROF_ENTRY_TYPE_MAX        7
+#define MLX5_RXP_ROF_ENTRY_INST                 0
+#define MLX5_RXP_ROF_ENTRY_EQ                   1
+#define MLX5_RXP_ROF_ENTRY_GTE                  2
+#define MLX5_RXP_ROF_ENTRY_LTE                  3
+#define MLX5_RXP_ROF_ENTRY_CHECKSUM             4
+#define MLX5_RXP_ROF_ENTRY_CHECKSUM_EX_EM       5
+#define MLX5_RXP_ROF_ENTRY_IM                   6
+#define MLX5_RXP_ROF_ENTRY_EM                   7
+#define MLX5_RXP_ROF_ENTRY_TYPE_MAX             7
+
+#define MLX5_MAX_SIZE_RES_DES    (sizeof(struct mlx5_rxp_response_desc))
+#define MLX5_MAX_DB_SIZE         (1u << 27u) //128MB
+#define MLX5_MAX_SIZE_MATCH_RESP (254 * sizeof(struct mlx5_rxp_match_tuple))
+#define MLX5_RXP_SQ_NOT_BUSY     false
+#define MLX5_RXP_SQ_BUSY         true
+
 
 struct mlx5_rxp_ctl_hdr {
 	uint16_t	cmd;
@@ -104,14 +107,12 @@ struct mlx5_rxp_rof {
 };
 
 struct mlx5_rxp_ctl_rules_pgm {
-	struct mlx5_rxp_ctl_hdr	hdr;
-	uint32_t		count;
+	struct mlx5_rxp_ctl_hdr         hdr;
+	uint32_t		        count;
 	struct mlx5_rxp_rof_entry	rules[0];
 } __attribute__ ((__packed__));
 
-/*
- * RXP programming mode setting
- */
+/* RXP programming mode setting. */
 enum mlx5_rxp_program_mode {
     MLX5_RXP_MODE_NOT_DEFINED = 0,
     MLX5_RXP_SHARED_PROG_MODE,
@@ -119,10 +120,10 @@ enum mlx5_rxp_program_mode {
 };
 
 #define MLX5_RXP_POLL_CSR_FOR_VALUE_TIMEOUT 3000 /* Poll timeout in ms. */
-#define MLX5_RXP_INITIALIZATION_TIMEOUT 60000 /* Initialization timeout in ms. */
-#define MLX5_RXP_MAX_ENGINES 2u /* Number of engines. */
+#define MLX5_RXP_INITIALIZATION_TIMEOUT 60000 /* Initialize timeout in ms. */
+#define MLX5_RXP_MAX_ENGINES 2u /* Number of RXP engines. */
 #define MLX5_RXP_SHADOW_EM_COUNT 1u /* Extra External Memories to use. */
-#define MLX5_RXP_MAX_NOT_USED 0xFF
+#define MLX5_RXP_DB_NOT_ASSIGNED 0xFF
 
 struct mlx5_regex_umem {
 	struct mlx5dv_devx_umem *umem;
