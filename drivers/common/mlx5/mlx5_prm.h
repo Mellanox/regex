@@ -780,6 +780,7 @@ enum {
 	MLX5_CMD_OP_SUSPEND_QP = 0x50F,
 	MLX5_CMD_OP_RESUME_QP = 0x510,
 	MLX5_CMD_OP_QUERY_NIC_VPORT_CONTEXT = 0x754,
+	MLX5_CMD_OP_ALLOC_PD = 0x800,
 	MLX5_CMD_OP_ALLOC_TRANSPORT_DOMAIN = 0x816,
 	MLX5_CMD_OP_CREATE_TIR = 0x900,
 	MLX5_CMD_OP_CREATE_SQ = 0X904,
@@ -2047,6 +2048,23 @@ struct mlx5_ifc_create_cq_in_bits {
 	u8 reserved_at_2e1[0x1f];
 	u8 reserved_at_300[0x580];
 	u8 pas[];
+};
+
+struct mlx5_ifc_alloc_pd_out_bits {
+	u8 status[0x8];
+	u8 reserved_at_8[0x18];
+	u8 syndrome[0x20];
+	u8 reserved_at_40[0x8];
+	u8 pdn[0x18];
+	u8 reserved_at_60[0x20];
+};
+
+struct mlx5_ifc_alloc_pd_in_bits {
+	u8 opcode[0x10];
+	u8 uid[0x10];
+	u8 reserved_at_20[0x10];
+	u8 op_mod[0x10];
+	u8 reserved_at_40[0x40];
 };
 
 enum {

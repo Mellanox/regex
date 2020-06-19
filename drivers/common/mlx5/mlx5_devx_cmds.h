@@ -343,6 +343,8 @@ __rte_internal
 int mlx5_devx_cmd_qp_query_tis_td(void *qp, uint32_t tis_num,
 				  uint32_t *tis_td);
 __rte_internal
+struct mlx5_devx_obj *mlx5_devx_cmd_alloc_pd(void *ctx);
+__rte_internal
 struct mlx5_devx_obj *mlx5_devx_cmd_create_rq(void *ctx,
 				       struct mlx5_devx_create_rq_attr *rq_attr,
 				       int socket);

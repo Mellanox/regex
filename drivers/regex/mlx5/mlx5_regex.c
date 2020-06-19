@@ -169,6 +169,12 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 		rte_errno = ENOMEM;
 		goto error;
 	}
+	priv->pd = mlx5_devx_cmd_alloc_pd(ctx);
+	if (!priv->pd) {
+		DRV_LOG(ERR, "can't allocate pd.");
+		rte_errno = ENOMEM;
+		goto error;
+	}
 	priv->regexdev->dev_ops = &mlx5_regexdev_ops;
 	priv->regexdev->device = (struct rte_device *)pci_dev;
 	priv->regexdev->data->dev_private = priv;
@@ -176,6 +182,8 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	return 0;
 
 error:
+	if (priv->pd)
+		mlx5_devx_cmd_destroy(priv->pd);
 	if (priv->uar)
 		mlx5_glue->devx_free_uar(priv->uar);
 	if (priv->regexdev)
@@ -211,6 +219,8 @@ mlx5_regex_pci_remove(struct rte_pci_device *pci_dev)
 		return 0;
 	priv = dev->data->dev_private;
 	if (priv) {
+		if (priv->pd)
+			mlx5_devx_cmd_destroy(priv->pd);
 		if (priv->ctx)
 			mlx5_glue->close_device(priv->ctx);
 		if (priv->regexdev)

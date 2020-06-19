@@ -1613,3 +1613,38 @@ mlx5_devx_regex_register_read(struct ibv_context *ctx, int engine_id,
 	*data = DEVX_GET(query_regexp_register_out, out, register_data);
 	return 0;
 }
+
+/*
+ * Alloc PD using DevX API.
+ *
+ * @param[in] ctx
+ *   Context returned from mlx5 open_device() glue function.
+ *
+ * @return
+ *   The DevX object created, NULL otherwise and rte_errno is set.
+ */
+struct mlx5_devx_obj *
+mlx5_devx_cmd_alloc_pd(void *ctx)
+{
+	uint32_t in[MLX5_ST_SZ_DW(alloc_pd_in)] = {0};
+	uint32_t out[MLX5_ST_SZ_DW(alloc_pd_out)] = {0};
+	struct mlx5_devx_obj *pd_obj = rte_zmalloc(__func__, sizeof(*pd_obj),
+						   0);
+
+	if (!pd_obj) {
+		DRV_LOG(ERR, "Failed to allocate PD object memory.");
+		rte_errno = ENOMEM;
+		return NULL;
+	}
+	MLX5_SET(create_cq_in, in, opcode, MLX5_CMD_OP_ALLOC_PD);
+	pd_obj->obj = mlx5_glue->devx_obj_create(ctx, in, sizeof(in), out,
+						 sizeof(out));
+	if (!pd_obj->obj) {
+		rte_errno = errno;
+		DRV_LOG(ERR, "Failed to create PD using DevX errno=%d.", errno);
+		rte_free(pd_obj);
+		return NULL;
+	}
+	pd_obj->id = MLX5_GET(alloc_pd_out, out, pdn);
+	return pd_obj;
+}

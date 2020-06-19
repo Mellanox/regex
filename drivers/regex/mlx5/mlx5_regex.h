@@ -20,6 +20,12 @@
 
 struct mlx5_regex_sq {
 	uint32_t nb_desc; /* Number of desc for this object. */
+	uint16_t pi; /* SQ producer index. */
+	struct mlx5_devx_obj *obj; /* The SQ DevX object. */
+	int64_t dbr_offset; /* Door bell record offset. */
+	uint32_t dbr_umem; /* Door bell record umem id. */
+	volatile struct mlx5_cqe *wqe; /* The SQ ring buffer. */
+	struct mlx5dv_devx_umem *wqe_umem; /* SQ buffer umem. */
 };
 
 struct mlx5_regex_cq {
@@ -62,7 +68,7 @@ struct mlx5_regex_priv {
 	struct mlx5_dbr_page_list dbrpgs; /* Door-bell pages. */
 	uint32_t eqn; /* EQ number. */
 	struct mlx5dv_devx_uar *uar; /* UAR object. */
-
+	struct mlx5_devx_obj *pd;
 };
 
 /* mlx5_rxp.c */
