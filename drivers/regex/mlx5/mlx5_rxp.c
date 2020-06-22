@@ -44,9 +44,11 @@ void rxp_dump_csrs(struct ibv_context *ctx, uint8_t id)
         uint32_t reg, i;
 
         /* Main CSRs*/
-        for (i = 0; i < 31; i++) {
-                if (mlx5_regex_register_read(ctx, id, (MLX5_RXP_CSR_WIDTH * i) +
-                    MLX5_RXP_CSR_BASE_ADDRESS, &reg)) {
+        for (i = 0; i < MLX5_RXP_CSR_NUM_ENTRIES; i++) {
+                if (mlx5_devx_regex_register_read(ctx, id,
+                                                  (MLX5_RXP_CSR_WIDTH * i) +
+                                                  MLX5_RXP_CSR_BASE_ADDRESS,
+                                                  &reg)) {
                         DRV_LOG(ERR, "Failed to read Main CSRs Engine %d!", id);
                         return;
                 }
@@ -54,10 +56,12 @@ void rxp_dump_csrs(struct ibv_context *ctx, uint8_t id)
                         i, reg, id);
         }
         /* RTRU CSRs*/
-        for (i = 0; i < 31; i++)
+        for (i = 0; i < MLX5_RXP_CSR_NUM_ENTRIES; i++)
         {
-                if (mlx5_regex_register_read(ctx, id, (MLX5_RXP_CSR_WIDTH * i) +
-                    MLX5_RXP_RTRU_CSR_BASE_ADDRESS, &reg)) {
+                if (mlx5_devx_regex_register_read(ctx, id,
+                                                  (MLX5_RXP_CSR_WIDTH * i) +
+                                                 MLX5_RXP_RTRU_CSR_BASE_ADDRESS,
+                                                  &reg)) {
                         DRV_LOG(ERR, "Failed to read RTRU CSRs Engine %d!", id);
                         return;
                 }
@@ -65,10 +69,12 @@ void rxp_dump_csrs(struct ibv_context *ctx, uint8_t id)
                         i, reg, id);
         }
         /* STAT CSRs */
-        for (i = 0; i < 31; i++)
+        for (i = 0; i < MLX5_RXP_CSR_NUM_ENTRIES; i++)
         {
-                if (mlx5_regex_register_read(ctx, id,(MLX5_RXP_CSR_WIDTH * i) +
-                    MLX5_RXP_STATS_CSR_BASE_ADDRESS , &reg)) {
+                if (mlx5_devx_regex_register_read(ctx, id,
+                                                  (MLX5_RXP_CSR_WIDTH * i) +
+                                                MLX5_RXP_STATS_CSR_BASE_ADDRESS,
+                                                  &reg)) {
                         DRV_LOG(ERR, "Failed to read STAT CSRs Engine %d!", id);
                         return;
                 }
@@ -117,26 +123,28 @@ mlx5_regex_info_get(struct rte_regexdev *dev,
  * @return
  *   0 on success, a negative errno value otherwise and rte_errno is set.
  */
-static
-int rxp_write_rules_via_cp(struct ibv_context *ctx,
+static int
+rxp_write_rules_via_cp(struct ibv_context *ctx,
                            struct mlx5_rxp_rof_entry *rules,
                            int count, uint8_t id)
 {
-        int i, err = 0;
+        int i, ret = 0;
         uint32_t tmp;
 
         for (i = 0; i < count; i++) {
                 tmp = (uint32_t)rules[i].value;
-                err |= mlx5_regex_register_write(ctx, rxp_eng,
-                                        MLX5_RXP_RTRU_CSR_DATA_0, tmp);
+                ret |= mlx5_devx_regex_register_write(ctx, rxp_eng,
+                                                      MLX5_RXP_RTRU_CSR_DATA_0,
+                                                      tmp);
                 tmp = (uint32_t)(rules[i].value >> 32);
-                err |= mlx5_regex_register_write(ctx, id,
-                                                 MLX5_RXP_RTRU_CSR_DATA_0 +
-                                                 MLX5_RXP_CSR_WIDTH, tmp);
+                ret |= mlx5_devx_regex_register_write(ctx, id,
+                                                      MLX5_RXP_RTRU_CSR_DATA_0 +
+                                                      MLX5_RXP_CSR_WIDTH, tmp);
                 tmp = rules[i].addr;
-                err |= mlx5_regex_register_write(ctx, id,
-                                                 MLX5_RXP_RTRU_CSR_ADDR, tmp);
-                if (err) {
+                ret |= mlx5_devx_regex_register_write(ctx, id,
+                                                      MLX5_RXP_RTRU_CSR_ADDR,
+                                                      tmp);
+                if (ret) {
                         DRV_LOG(ERR, "Failed to copy instructions to RXP.");
                         return -1;
                 }
@@ -160,8 +168,8 @@ int rxp_write_rules_via_cp(struct ibv_context *ctx,
  * @return
  *   0 on success, a negative errno value otherwise and rte_errno is set.
  */
-static
-int rxp_flush_rules(struct ibv_context *ctx, struct rxp_rof_entry *rules,
+static int
+rxp_flush_rules(struct ibv_context *ctx, struct rxp_rof_entry *rules,
                     int count, uint8_t id)
 {
         uint32_t val, fifo_depth;
@@ -172,9 +180,9 @@ int rxp_flush_rules(struct ibv_context *ctx, struct rxp_rof_entry *rules,
                 DRV_LOG(ERR, "Failed to write rules via CSRs");
                 return -1;
         }
-        if ((ret = mlx5_regex_register_read(ctx, id,
-                                            MLX5_RXP_RTRU_CSR_CAPABILITY,
-                                            &fifo_depth))) {
+        if ((ret = mlx5_devx_regex_register_read(ctx, id,
+                                                 MLX5_RXP_RTRU_CSR_CAPABILITY,
+                                                 &fifo_depth))) {
                 DRV_LOG(ERR, "CSR read failed!");
                 return -1;
         }
@@ -188,13 +196,15 @@ int rxp_flush_rules(struct ibv_context *ctx, struct rxp_rof_entry *rules,
         }
         DRV_LOG(DEBUG, "RTRU FIFO depth: 0x%x", fifo_depth);
         DRV_LOG(DEBUG, "Rules flush took %d cycles.", ret);
-        if ((ret = mlx5_regex_register_read(ctx, id, MLX5_RXP_RTRU_CSR_CTRL,
-                                            &val))) {
+        if ((ret = mlx5_devx_regex_register_read(ctx, id,
+                                                 MLX5_RXP_RTRU_CSR_CTRL,
+                                                 &val))) {
                 DRV_LOG(ERR, "CSR read failed!");
                 return -1;
         }
         val |= MLX5_RXP_RTRU_CSR_CTRL_GO;
-        ret = mlx5_regex_register_write(ctx, id, MLX5_RXP_RTRU_CSR_CTRL, val);
+        ret = mlx5_devx_regex_register_write(ctx, id, MLX5_RXP_RTRU_CSR_CTRL,
+                                             val);
         ret = rxp_poll_csr_for_value(ctx, &val, MLX5_RXP_RTRU_CSR_STATUS,
                                      MLX5_RXP_RTRU_CSR_STATUS_UPDATE_DONE,
                                      MLX5_RXP_RTRU_CSR_STATUS_UPDATE_DONE,
@@ -204,12 +214,14 @@ int rxp_flush_rules(struct ibv_context *ctx, struct rxp_rof_entry *rules,
                 return ret;
         }
         DRV_LOG(DEBUG, "Rules update took %d cycles", ret);
-        if (mlx5_regex_register_read(ctx, id, MLX5_RXP_RTRU_CSR_CTRL, &val)) {
+        if (mlx5_devx_regex_register_read(ctx, id, MLX5_RXP_RTRU_CSR_CTRL,
+                                          &val)) {
                 DRV_LOG(ERR, "CSR read failed!");
                 return -1;
         }
         val &= ~(MLX5_RXP_RTRU_CSR_CTRL_GO);
-        if (mlx5_regex_register_write(ctx, id, MLX5_RXP_RTRU_CSR_CTRL, val)) {
+        if (mlx5_devx_regex_register_write(ctx, id, MLX5_RXP_RTRU_CSR_CTRL,
+                                           val)) {
                 DRV_LOG(ERR, "CSR write write failed!");
                 return -1;
         }
@@ -479,11 +491,9 @@ parse_error:
 int
 mlnx_set_database(struct mlx5_regex_priv *priv, uint8_t id, uint8_t db_to_use)
 {
-        //mlx5_regex_engine_stop(priv->ctx, id); //Ori: I'm guessing this isnt used anymore?
         priv->db[db_to_use].umem.id = priv->db[db_to_use].umem.umem->umem_id;
         priv->db[db_to_use].umem.offset = 0;
-        //mlx5_regex_database_set(priv->ctx, id /*engine_id*/,     //Ori: Where is this now?
-          //                      &priv->db[db_to_use].umem);
+        mlx5_regex_database_set(priv->ctx, id, &priv->db[db_to_use].umem);
         return 1;
 }
 
@@ -632,7 +642,6 @@ program_rxp_rules(struct mlx5_regex_priv *priv, const char *rule_buf,
                 DRV_LOG(ERR, "Failed to read valid program mode!");
                 return -1;
         }
-        //mlx5_regex_engine_resume(ctx, id); //Ori: I guess this now redundant
         rules->count = rule_cnt;
 	rte_free(rules);
 	return 0;
@@ -761,7 +770,7 @@ write_private_rules(struct mlx5_regex_priv *priv,
                 return -EINVAL;
 
         /* Confirm the RXP is initialised. */
-        if ((ret = mlx5_regex_register_read(priv->ctx, id,
+        if ((ret = mlx5_devx_regex_register_read(priv->ctx, id,
                                             MLX5_RXP_CSR_STATUS, &val))) {
                 DRV_LOG(ERR, "Failed to read from RXP!");
                 return -ENODEV;
@@ -771,7 +780,7 @@ write_private_rules(struct mlx5_regex_priv *priv,
                 return -EBUSY;
         }
         /* Get the RTRU maximum number of entries allowed. */
-        if ((ret = mlx5_regex_register_read(rxp.device_ctx, id,
+        if ((ret = mlx5_devx_regex_register_read(rxp.device_ctx, id,
                         MLX5_RXP_RTRU_CSR_CAPABILITY, &rtru_max_num_entries))) {
                 DRV_LOG(ERR, "Failed to read RTRU capability!");
                 return -ENODEV;
@@ -860,16 +869,16 @@ write_private_rules(struct mlx5_regex_priv *priv,
                         }
                         reg += (rules->rules[rule_cnt].addr & 0xFFFF) *
                                 MLX5_RXP_CSR_WIDTH;
-                        ret = mlx5_regex_register_read(rxp.device_ctx, id, reg,
-                                                       &val);
+                        ret = mlx5_devx_regex_register_read(rxp.device_ctx, id,
+                                                            reg, &val);
                         if (ret) {
                                 DRV_LOG(ERR, "RXP CSR read failed!");
                                 return ret;
                         }
                         if ((priv->prog_mode == MLX5_RXP_SHARED_PROG_MODE) &&
-                        ((rules->rules[rule_cnt].type ==
-                                MLX5_RXP_ROF_ENTRY_CHECKSUM_EX_EM) &&
-                                (val != rules->rules[rule_cnt].value))) {
+                            ((rules->rules[rule_cnt].type ==
+                            MLX5_RXP_ROF_ENTRY_CHECKSUM_EX_EM) &&
+                            (val != rules->rules[rule_cnt].value))) {
                                 DRV_LOG(ERR, "Unexpected value for reg %x"
                                         PRIu32 ", got %x" PRIu32 ", expected %"
                                         PRIx64 ".",
@@ -878,9 +887,9 @@ write_private_rules(struct mlx5_regex_priv *priv,
                                         return -EINVAL;
                         }
                         else if ((rxp_prog_mode ==
-                                        MLX5_RXP_PRIVATE_PROG_MODE) &&
+                                 MLX5_RXP_PRIVATE_PROG_MODE) &&
                                  (rules->rules[rule_cnt].type ==
-                                        MLX5_RXP_ROF_ENTRY_CHECKSUM) &&
+                                 MLX5_RXP_ROF_ENTRY_CHECKSUM) &&
                                  (val != rules->rules[rule_cnt].value)) {
                                 DRV_LOG(ERR, "Unexpected value for reg %x"
                                         PRIu32 ", got %x" PRIu32 ", expected %"
@@ -965,8 +974,8 @@ mlx5_write_shared_rules(struct mlx5_regex_priv *priv,
                 return -EINVAL;
         rule_cnt = 0;
         while (rule_cnt < rules->count) {
-                if ((rules->rules[rule_cnt].type == MLX5_RXP_ROF_ENTRY_EM)
-                        && (priv->prog_mode == MLX5_RXP_SHARED_PROG_MODE)) {
+                if ((rules->rules[rule_cnt].type == MLX5_RXP_ROF_ENTRY_EM) &&
+                    (priv->prog_mode == MLX5_RXP_SHARED_PROG_MODE)) {
 //TODO add version capability bit check here when available!
 #ifdef VIPER_BF2
                         /*
@@ -981,12 +990,12 @@ mlx5_write_shared_rules(struct mlx5_regex_priv *priv,
                                  * accounted for!
                                  */
                                 if ((uint8_t*)((uint8_t*)priv->
-                                        db[db_to_program].ptr +
-                                        ((rules->rules[rule_cnt + 7].addr <<
-                                                MLX5_RXP_INST_OFFSET))) >=
-                                        ((uint8_t*)((uint8_t*)priv->
-                                        db[db_to_program].ptr +
-                                                MLX5_MAX_DB_SIZE))) {
+                                    db[db_to_program].ptr +
+                                    ((rules->rules[rule_cnt + 7].addr <<
+                                    MLX5_RXP_INST_OFFSET))) >=
+                                    ((uint8_t*)((uint8_t*)priv->
+                                    db[db_to_program].ptr +
+                                    MLX5_MAX_DB_SIZE))) {
                                         DRV_LOG(ERR, "DB exceeded memory "
                                                 "boundary!");
                                         return -ENODEV;
@@ -1008,9 +1017,9 @@ mlx5_write_shared_rules(struct mlx5_regex_priv *priv,
                                         rules->rules[(rule_cnt + 7)].value);
                                 /* Write only 4 of the 8 instructions. */
                                 memcpy((uint8_t*)((uint8_t*)priv->
-                                        db[db_to_program].ptr + rof_rule_addr),
-                                        &tmp_write_swap,
-                                        (sizeof(uint64_t) * 4));
+                                       db[db_to_program].ptr + rof_rule_addr),
+                                       &tmp_write_swap,
+                                       (sizeof(uint64_t) * 4));
                                 /* Write 1st 4 rules of block after last 4. */
                                 rof_rule_addr = (rules->rules[(rule_cnt + 4)].
                                                  addr << MLX5_RXP_INST_OFFSET);
@@ -1023,9 +1032,9 @@ mlx5_write_shared_rules(struct mlx5_regex_priv *priv,
                                 tmp_write_swap[3] = le64toh(
                                         rules->rules[(rule_cnt + 3)].value);
                                 memcpy((uint8_t*)((uint8_t*)priv->
-                                        db[db_to_program].ptr + rof_rule_addr),
-                                        &tmp_write_swap,
-                                        (sizeof(uint64_t) * 4));
+                                       db[db_to_program].ptr + rof_rule_addr),
+                                       &tmp_write_swap,
+                                       (sizeof(uint64_t) * 4));
                         }
                         else
                                 return -1;
@@ -1038,9 +1047,9 @@ mlx5_write_shared_rules(struct mlx5_regex_priv *priv,
                          */
                         if ((uint8_t*)((uint8_t*)priv->db[db_to_program].ptr +
                             (rules->rules[rule_cnt].addr <<
-                                MLX5_RXP_INST_OFFSET)) >=
-                                (uint8_t*)((uint8_t*)priv->db[db_to_program].ptr
-                                        + MLX5_MAX_DB_SIZE)) {
+                            MLX5_RXP_INST_OFFSET)) >=
+                            (uint8_t*)((uint8_t*)priv->db[db_to_program].ptr
+                            + MLX5_MAX_DB_SIZE)) {
                                 /* Error as exceeded database memory boundary. */
                                 DRV_LOG(ERR, "DB exceeded memory boundary!");
                                 return -ENODEV;
@@ -1053,7 +1062,7 @@ mlx5_write_shared_rules(struct mlx5_regex_priv *priv,
                                          MLX5_RXP_INST_OFFSET);
                         rof_value = le64toh(rules->rules[rule_cnt].value);
                         memcpy((uint8_t*)((uint8_t*)priv->db[db_to_program].ptr
-                                + rof_rule_addr), &rof_value, sizeof(uint64_t));
+                               + rof_rule_addr), &rof_value, sizeof(uint64_t));
                         rule_cnt++;
 #endif /* VIPER_BF2 */
                 }
@@ -1080,8 +1089,8 @@ rxp_db_setup(struct mlx5_regex_priv *priv)
         /* Setup database memories for both RXP engines + reprogram memory. */
         for (i = 0; i < (MLX5_RXP_MAX_ENGINES + MLX5_RXP_SHADOW_EM_COUNT); i++){
                 priv->db[i].ptr = mmap(NULL, MLX5_MAX_DB_SIZE, PROT_READ |
-                PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS | MAP_POPULATE |
-                MAP_HUGETLB, -1, 0);
+                                       PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS |
+                                       MAP_POPULATE | MAP_HUGETLB, -1, 0);
                 if (!priv->db[i].ptr) {
                         DRV_LOG(ERR, "Failed to alloc db memory!");
                         ret = ENODEV;

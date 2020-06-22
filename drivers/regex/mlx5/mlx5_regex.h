@@ -35,7 +35,6 @@ struct mlx5_regex_priv {
 	uint16_t nb_queues; /* Number of queues. */
 	struct mlx5_regex_qp *qps; /* Pointer to the qp array. */
 	uint16_t nb_max_matches; /* Max number of matches. */
-	//ORI check, where best to add this mode? :
 	enum mlx5_rxp_program_mode prog_mode;
 	struct mlx5_regex_db db[MLX5_RXP_MAX_ENGINES +
 				MLX5_RXP_SHADOW_EM_COUNT];
