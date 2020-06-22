@@ -317,6 +317,15 @@ struct mlx5_devx_qp_attr {
 	uint64_t wq_umem_offset;
 };
 
+/* RXP database set attributes structure. */
+struct mlx5_devx_rxp_database_attr {
+	uint32_t umem_id;
+	uint64_t umem_offset;
+	uint8_t stop;
+	uint8_t resume;
+	uint8_t engine_id;
+};
+
 /* mlx5_devx_cmds.c */
 
 __rte_internal
@@ -396,5 +405,8 @@ int mlx5_devx_regex_register_write(struct ibv_context *ctx, int engine_id,
 				   uint32_t addr, uint32_t data);
 int mlx5_devx_regex_register_read(struct ibv_context *ctx, int engine_id,
 				  uint32_t addr, uint32_t *data);
+__rte_internal
+int mlx5_devx_regex_database_set(void *ctx,
+				 struct mlx5_devx_rxp_database_attr *attr);
 
 #endif /* RTE_PMD_MLX5_DEVX_CMDS_H_ */

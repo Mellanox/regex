@@ -31,6 +31,7 @@ INTERNAL {
 	mlx5_devx_cmd_query_hca_attr;
 	mlx5_devx_cmd_query_virtq;
 	mlx5_devx_get_out_command_status;
+	mlx5_devx_regex_database_set;
 
 	mlx5_mp_init_primary;
 	mlx5_mp_uninit_primary;

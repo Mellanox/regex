@@ -1614,6 +1614,50 @@ mlx5_devx_regex_register_read(struct ibv_context *ctx, int engine_id,
 	return 0;
 }
 
+/**
+ * Issue the RXP set database command.
+ *
+ * @param[in] ctx
+ *   Context returned from mlx5 open_device() glue function.
+ * @param[in] attr
+ *   Pointer to database attributes structure.
+ *
+ * @return
+ *   0 on success, a negative errno value otherwise and rte_errno is set.
+ */
+int
+mlx5_devx_regex_database_set(void *ctx,
+			     struct mlx5_devx_rxp_database_attr *attr)
+{
+	uint32_t out[DEVX_ST_SZ_DW(set_regexp_params_out)] = {};
+	uint32_t in[DEVX_ST_SZ_DW(set_regexp_params_in)] = {};
+	int ret;
+
+	DEVX_SET(set_regexp_params_in, in, opcode, MLX5_CMD_SET_REGEX_PARAMS);
+	DEVX_SET(set_regexp_params_in, in, engine_id, attr->engine_id);
+	if (attr->stop || attr->resume) {
+		DEVX_SET(set_regexp_params_in, in, regexp_params.stop_engine,
+			 attr->stop);
+		DEVX_SET(set_regexp_params_in, in, field_select.stop_engine, 1);
+	}
+
+	if (attr->umem_id) {
+		DEVX_SET(set_regexp_params_in, in, regexp_params.db_umem_id,
+			 attr->umem_id);
+		DEVX_SET64(set_regexp_params_in, in,
+			   regexp_params.db_umem_offset, attr->umem_offset);
+		DEVX_SET(set_regexp_params_in, in, field_select.db_umem_id, 1);
+	}
+	ret = mlx5_glue->devx_general_cmd(ctx, in, sizeof(in), out,
+					  sizeof(out));
+	if (ret) {
+		DRV_LOG(ERR, "Database set failed %d", ret);
+		rte_errno = errno;
+		return -errno;
+	}
+	return 0;
+}
+
 /*
  * Alloc PD using DevX API.
  *
