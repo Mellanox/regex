@@ -112,7 +112,7 @@ mlx5_regex_dev_enqueue(struct rte_regex_dev *dev, uint16_t qp_id,
 	}
 
 out:
-	queue->pi++;
+	queue->pi += i;
 	return i;
 }
 
