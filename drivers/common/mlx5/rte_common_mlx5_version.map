@@ -35,6 +35,9 @@ INTERNAL {
 	mlx5_devx_cmd_query_virtio_q_counters;
 	mlx5_devx_cmd_query_virtq;
 	mlx5_devx_get_out_command_status;
+	mlx5_devx_regex_database_program;
+	mlx5_devx_regex_database_resume;
+	mlx5_devx_regex_database_stop;
 
 	mlx5_get_ifname_sysfs;
 	mlx5_get_dbr;
