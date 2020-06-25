@@ -25,6 +25,9 @@ struct mlx5_regex_sq {
 	uint32_t dbr_umem; /* Door bell record umem id. */
 	uint8_t *wqe; /* The SQ ring buffer. */
 	struct mlx5dv_devx_umem *wqe_umem; /* SQ buffer umem. */
+	size_t pi, db_pi;
+	size_t ci;
+	uint32_t sqn;
 	uint32_t *dbr;
 };
 
@@ -49,6 +52,7 @@ struct mlx5_regex_qp {
 	struct ibv_mr *metadata;
 	struct ibv_mr *inputs;
 	struct ibv_mr *outputs;
+	size_t ci, pi;
 };
 
 struct mlx5_regex_db {
@@ -87,4 +91,6 @@ int mlx5_regex_qp_setup(struct rte_regexdev *dev, uint16_t qp_ind,
 
 /* mlx5_regex_fastpath.c */
 int mlx5_regexdev_setup_fastpath(struct mlx5_regex_priv *priv, uint32_t qp_id);
+int mlx5_regexdev_enqueue(struct rte_regexdev *dev, uint16_t qp_id,
+		       struct rte_regex_ops **ops, uint16_t nb_ops);
 #endif /* MLX5_REGEX_H */
