@@ -42,6 +42,11 @@ struct mlx5_regex_qp {
 	struct mlx5_regex_sq *sqs; /* Pointer to sq array. */
 	uint16_t nb_obj; /* Number of sq objects. */
 	struct mlx5_regex_cq cq; /* CQ struct. */
+	uint32_t free_sqs;
+	struct mlx5_regex_job *jobs;
+	struct ibv_mr *metadata;
+	struct ibv_mr *inputs;
+	struct ibv_mr *outputs;
 };
 
 struct mlx5_regex_db {
@@ -77,4 +82,7 @@ int mlx5_regex_configure(struct rte_regexdev *dev,
 			 const struct rte_regexdev_config *cfg);
 int mlx5_regex_qp_setup(struct rte_regexdev *dev, uint16_t qp_ind,
 			const struct rte_regexdev_qp_conf *cfg);
+
+/* mlx5_regex_fastpath.c */
+int mlx5_regexdev_setup_fastpath(struct mlx5_regex_priv *priv, uint32_t qp_id);
 #endif /* MLX5_REGEX_H */
