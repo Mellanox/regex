@@ -25,6 +25,10 @@ struct mlx5_regex_sq {
 	uint32_t dbr_umem; /* Door bell record umem id. */
 	uint8_t *wqe; /* The SQ ring buffer. */
 	struct mlx5dv_devx_umem *wqe_umem; /* SQ buffer umem. */
+	size_t pi;
+	size_t db_pi;
+	size_t ci;
+	uint32_t sqn;
 	uint32_t *dbr;
 };
 
@@ -35,6 +39,7 @@ struct mlx5_regex_cq {
 	uint32_t dbr_umem; /* Door bell record umem id. */
 	volatile struct mlx5_cqe *cqe; /* The CQ ring buffer. */
 	struct mlx5dv_devx_umem *cqe_umem; /* CQ buffer umem. */
+	size_t ci;
 	uint32_t *dbr;
 };
 
@@ -45,6 +50,8 @@ struct mlx5_regex_qp {
 	uint16_t nb_obj; /* Number of sq objects. */
 	struct mlx5_regex_cq cq; /* CQ struct. */
 	uint32_t free_sqs;
+	size_t ci;
+	size_t pi;
 	struct mlx5_regex_job *jobs;
 	struct ibv_mr *metadata;
 	struct ibv_mr *inputs;
@@ -90,6 +97,11 @@ int mlx5_regex_rules_db_import(struct rte_regexdev *dev,
 
 /* mlx5_regex_fastpath.c */
 int mlx5_regexdev_setup_fastpath(struct mlx5_regex_priv *priv, uint32_t qp_id);
-
+int mlx5_regexdev_enqueue(struct rte_regexdev *dev, uint16_t qp_id,
+		       struct rte_regex_ops **ops, uint16_t nb_ops);
+int mlx5_regexdev_enqueue(struct rte_regexdev *dev, uint16_t qp_id,
+		       struct rte_regex_ops **ops, uint16_t nb_ops);
+int mlx5_regexdev_dequeue(struct rte_regexdev *dev, uint16_t qp_id,
+		       struct rte_regex_ops **ops, uint16_t nb_ops);
 #endif /* MLX5_REGEX_H */
 
