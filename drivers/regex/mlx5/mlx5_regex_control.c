@@ -108,6 +108,9 @@ regex_ctrl_create_cq(struct mlx5_regex_priv *priv, struct mlx5_regex_cq *cq)
 		goto error;
 	}
 	cq->dbr_umem = mlx5_os_get_umem_id(dbr_page->umem);
+	cq->dbr = (uint32_t *)((uintptr_t)dbr_page->dbrs +
+			       (uintptr_t)cq->dbr_offset);
+
 	buf = rte_calloc(NULL, 1, sizeof(struct mlx5_cqe) * cq_size, 4096);
 	if (!buf) {
 		DRV_LOG(ERR, "Can't allocate cqe buffer.");
@@ -185,6 +188,9 @@ regex_ctrl_create_sq(struct mlx5_regex_priv *priv, struct mlx5_regex_qp *qp,
 		goto error;
 	}
 	sq->dbr_umem = mlx5_os_get_umem_id(dbr_page->umem);
+	sq->dbr = (uint32_t *)((uintptr_t)dbr_page->dbrs +
+			       (uintptr_t)sq->dbr_offset);
+
 	buf = rte_calloc(NULL, 1, 64 * sq_size, 4096);
 	if (!buf) {
 		DRV_LOG(ERR, "Can't allocate wqe buffer.");
