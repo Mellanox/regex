@@ -38,6 +38,7 @@ struct mlx5_regex_cq {
 	uint32_t dbr_umem; /* Door bell record umem id. */
 	volatile struct mlx5_cqe *cqe; /* The CQ ring buffer. */
 	struct mlx5dv_devx_umem *cqe_umem; /* CQ buffer umem. */
+	size_t ci;
 	uint32_t *dbr;
 };
 
@@ -93,4 +94,7 @@ int mlx5_regex_qp_setup(struct rte_regexdev *dev, uint16_t qp_ind,
 int mlx5_regexdev_setup_fastpath(struct mlx5_regex_priv *priv, uint32_t qp_id);
 int mlx5_regexdev_enqueue(struct rte_regexdev *dev, uint16_t qp_id,
 		       struct rte_regex_ops **ops, uint16_t nb_ops);
+int mlx5_regexdev_dequeue(struct rte_regexdev *dev, uint16_t qp_id,
+		       struct rte_regex_ops **ops, uint16_t nb_ops);
+
 #endif /* MLX5_REGEX_H */
