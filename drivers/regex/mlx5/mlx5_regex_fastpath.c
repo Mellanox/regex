@@ -174,6 +174,105 @@ out:
 	return i;
 }
 
+#define MLX5_REGEX_RESP_SZ 8
+
+static inline void
+extract_result(struct rte_regex_ops *op, struct mlx5_regex_job *job)
+{
+	size_t j, offset;
+	op->user_id = job->user_id;
+	op->nb_matches = DEVX_GET(regexp_metadata, job->metadata + 32,
+				  match_count);
+	op->nb_actual_matches = DEVX_GET(regexp_metadata, job->metadata + 32,
+					 detected_match_count);
+	for (j = 0; j < op->nb_matches; j++) {
+		offset = MLX5_REGEX_RESP_SZ * j;
+		op->matches[j].rule_id =
+			DEVX_GET(regexp_match_tuple, (job->output + offset),
+				 rule_id);
+		op->matches[j].start_offset =
+			DEVX_GET(regexp_match_tuple, (job->output +  offset),
+				 start_ptr);
+		op->matches[j].len =
+			DEVX_GET(regexp_match_tuple, (job->output +  offset),
+				 length);
+	}
+}
+
+static inline volatile struct mlx5_cqe *
+poll_one(struct mlx5_regex_cq *cq)
+{
+	volatile struct mlx5_cqe *cqe;
+	size_t next_cqe_offset;
+
+	next_cqe_offset =  (cq->ci % cq_size_get(cq)) * sizeof(*cqe);
+	cqe = (volatile struct mlx5_cqe *)(cq->cqe + next_cqe_offset);
+	rte_cio_wmb();
+
+	int ret = check_cqe(cqe, cq_size_get(cq), cq->ci);
+
+	if (unlikely(ret == MLX5_CQE_STATUS_ERR)) {
+		DRV_LOG(ERR, "Completion with error on qp 0x%x",  0);
+		exit(-1);
+	}
+
+	if (unlikely(ret != MLX5_CQE_STATUS_SW_OWN))
+		return NULL;
+
+	return cqe;
+}
+
+
+/**
+ * DPDK callback for dequeue.
+ *
+ * @param dev
+ *   Pointer to the regex dev structure.
+ * @param qp_id
+ *   The queue to enqueue the traffic to.
+ * @param ops
+ *   List of regex ops to dequeue.
+ * @param nb_ops
+ *   Number of ops in ops parameter.
+ *
+ * @return
+ *   Number of packets successfully dequeued (<= pkts_n).
+ */
+uint16_t
+mlx5_regexdev_dequeue(struct rte_regexdev *dev, uint16_t qp_id,
+		      struct rte_regex_ops **ops, uint16_t nb_ops)
+{
+	struct mlx5_regex_priv *priv = dev->data->dev_private;
+	struct mlx5_regex_qp *queue = &priv->qps[qp_id];
+	struct mlx5_regex_cq *cq = &queue->cq;
+	volatile struct mlx5_cqe *cqe;
+	size_t i = 0;
+
+	while ((cqe = poll_one(cq))) {
+		uint16_t wq_counter
+			= (be16toh(cqe->wqe_counter) + 1)%MAX_WQE_INDEX;
+		size_t sqid = cqe->rsvd3[2];
+		struct mlx5_regex_sq *sq = &queue->sqs[sqid];
+		while (sq->ci != wq_counter) {
+			if (unlikely(i == nb_ops)) {
+				/* Return without updating cq->ci */
+				goto out;
+			}
+			uint32_t job_id = job_id_get(sqid, sq_size_get(sq), sq->ci);
+			extract_result(ops[i], &queue->jobs[job_id]);
+			sq->ci = (sq->ci+1)%MAX_WQE_INDEX;
+			i++;
+		}
+		cq->ci = (cq->ci + 1) & 0xffffff;
+		asm volatile("" ::: "memory");
+		cq->dbr[0] = htobe32(cq->ci);
+		queue->free_sqs |= (1 << sqid);
+	}
+
+out:
+	queue->ci += i;
+	return i;
+}
 
 static MLX5DV_ALWAYS_INLINE
 void mlx5dv_set_metadata_seg(struct mlx5_wqe_metadata_seg *seg,
