@@ -23,7 +23,7 @@ struct mlx5_regex_sq {
 	struct mlx5_devx_obj *obj; /* The SQ DevX object. */
 	int64_t dbr_offset; /* Door bell record offset. */
 	uint32_t dbr_umem; /* Door bell record umem id. */
-	volatile struct mlx5_cqe *wqe; /* The SQ ring buffer. */
+	uint8_t *wqe; /* The SQ ring buffer. */
 	struct mlx5dv_devx_umem *wqe_umem; /* SQ buffer umem. */
 };
 
