@@ -205,7 +205,7 @@ regex_ctrl_create_sq(struct mlx5_regex_priv *priv, struct mlx5_regex_qp *qp,
 	attr.user_index = q_ind;
 	attr.cqn = qp->cq.obj->id;
 	wq_attr->uar_page = priv->uar->page_id;
-	wq_attr->pd = priv->pd->id;
+	wq_attr->pd = priv->pd->handle;
 	wq_attr->wq_type = MLX5_WQ_TYPE_CYCLIC;
 	wq_attr->dbr_umem_id = sq->dbr_umem;
 	wq_attr->dbr_addr = sq->dbr_offset;

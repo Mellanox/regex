@@ -67,7 +67,7 @@ struct mlx5_regex_priv {
 	struct mlx5_dbr_page_list dbrpgs; /* Door-bell pages. */
 	uint32_t eqn; /* EQ number. */
 	struct mlx5dv_devx_uar *uar; /* UAR object. */
-	struct mlx5_devx_obj *pd;
+	struct ibv_pd *pd;
 };
 
 /* mlx5_rxp.c */
