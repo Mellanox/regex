@@ -184,7 +184,7 @@ mlx5_glue_destroy_flow_action(void *action)
 		res = ibv_destroy_flow_action(attr->action);
 		break;
 	}
-	free(action);
+	mlx5_free(action);
 	return res;
 #endif
 #else
@@ -617,7 +617,7 @@ mlx5_glue_dv_create_flow_action_counter(void *counter_obj, uint32_t offset)
 	struct mlx5dv_flow_action_attr *action;
 
 	(void)offset;
-	action = malloc(sizeof(*action));
+	action = mlx5_malloc(0, sizeof(*action), 0, SOCKET_ID_ANY);
 	if (!action)
 		return NULL;
 	action->type = MLX5DV_FLOW_ACTION_COUNTERS_DEVX;
@@ -641,7 +641,7 @@ mlx5_glue_dv_create_flow_action_dest_ibv_qp(void *qp)
 #else
 	struct mlx5dv_flow_action_attr *action;
 
-	action = malloc(sizeof(*action));
+	action = mlx5_malloc(0, sizeof(*action), 0, SOCKET_ID_ANY);
 	if (!action)
 		return NULL;
 	action->type = MLX5DV_FLOW_ACTION_DEST_IBV_QP;
@@ -686,7 +686,7 @@ mlx5_glue_dv_create_flow_action_modify_header
 
 	(void)domain;
 	(void)flags;
-	action = malloc(sizeof(*action));
+	action = mlx5_malloc(0, sizeof(*action), 0, SOCKET_ID_ANY);
 	if (!action)
 		return NULL;
 	action->type = MLX5DV_FLOW_ACTION_IBV_FLOW_ACTION;
@@ -726,7 +726,7 @@ mlx5_glue_dv_create_flow_action_packet_reformat
 	(void)flags;
 	struct mlx5dv_flow_action_attr *action;
 
-	action = malloc(sizeof(*action));
+	action = mlx5_malloc(0, sizeof(*action), 0, SOCKET_ID_ANY);
 	if (!action)
 		return NULL;
 	action->type = MLX5DV_FLOW_ACTION_IBV_FLOW_ACTION;
@@ -755,7 +755,8 @@ mlx5_glue_dv_create_flow_action_tag(uint32_t tag)
 	return mlx5dv_dr_action_create_tag(tag);
 #else /* HAVE_MLX5DV_DR */
 	struct mlx5dv_flow_action_attr *action;
-	action = malloc(sizeof(*action));
+
+	action = mlx5_malloc(0, sizeof(*action), 0, SOCKET_ID_ANY);
 	if (!action)
 		return NULL;
 	action->type = MLX5DV_FLOW_ACTION_TAG;
