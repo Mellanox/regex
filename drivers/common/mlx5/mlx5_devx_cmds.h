@@ -324,6 +324,7 @@ struct mlx5_devx_rxp_database_attr {
 	uint8_t stop;
 	uint8_t resume;
 	uint8_t engine_id;
+	uint8_t program;
 };
 
 /* mlx5_devx_cmds.c */

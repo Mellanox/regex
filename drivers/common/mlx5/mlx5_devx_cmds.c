@@ -1641,7 +1641,7 @@ mlx5_devx_regex_database_set(void *ctx,
 		DEVX_SET(set_regexp_params_in, in, field_select.stop_engine, 1);
 	}
 
-	if (attr->umem_id) {
+	if (attr->program) {
 		DEVX_SET(set_regexp_params_in, in, regexp_params.db_umem_id,
 			 attr->umem_id);
 		DEVX_SET64(set_regexp_params_in, in,

@@ -64,7 +64,7 @@ struct mlx5_regex_priv {
 	uint16_t nb_max_matches; /* Max number of matches. */
 	enum mlx5_rxp_program_mode prog_mode;
 	struct mlx5_regex_db db[MLX5_RXP_MAX_ENGINES +
-				MLX5_RXP_SHADOW_EM_COUNT];
+				MLX5_RXP_EM_COUNT];
 	struct mlx5_dbr_page_list dbrpgs; /* Door-bell pages. */
 	uint32_t eqn; /* EQ number. */
 	struct mlx5dv_devx_uar *uar; /* UAR object. */

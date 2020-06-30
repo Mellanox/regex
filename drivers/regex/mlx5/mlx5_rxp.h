@@ -118,15 +118,15 @@ struct mlx5_rxp_ctl_rules_pgm {
 
 /* RXP programming mode setting. */
 enum mlx5_rxp_program_mode {
-    MLX5_RXP_MODE_NOT_DEFINED = 0,
-    MLX5_RXP_SHARED_PROG_MODE,
-    MLX5_RXP_PRIVATE_PROG_MODE,
+	MLX5_RXP_MODE_NOT_DEFINED = 0,
+	MLX5_RXP_SHARED_PROG_MODE,
+	MLX5_RXP_PRIVATE_PROG_MODE,
 };
 
 #define MLX5_RXP_POLL_CSR_FOR_VALUE_TIMEOUT 3000 /* Poll timeout in ms. */
 #define MLX5_RXP_INITIALIZATION_TIMEOUT 60000 /* Initialize timeout in ms. */
 #define MLX5_RXP_MAX_ENGINES 2u /* Number of RXP engines. */
-#define MLX5_RXP_SHADOW_EM_COUNT 1u /* Extra External Memories to use. */
+#define MLX5_RXP_EM_COUNT 1u /* Extra External Memories to use. */
 #define MLX5_RXP_DB_NOT_ASSIGNED 0xFF
 
 struct mlx5_regex_umem {
