@@ -38,6 +38,8 @@ INTERNAL {
 	mlx5_devx_regex_database_program;
 	mlx5_devx_regex_database_resume;
 	mlx5_devx_regex_database_stop;
+	mlx5_devx_regex_register_read;
+	mlx5_devx_regex_register_write;
 
 	mlx5_get_ifname_sysfs;
 	mlx5_get_dbr;
