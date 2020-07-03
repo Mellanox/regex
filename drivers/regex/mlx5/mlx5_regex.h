@@ -81,6 +81,7 @@ struct mlx5_regex_priv {
 	struct mlx5dv_devx_uar *uar; /* UAR object. */
 	struct ibv_pd *pd;
 	struct mlx5_dbr_page_list dbrpgs; /* Door-bell pages. */
+	uint32_t num_engines;
 };
 
 /* mlx5_rxp.c */
