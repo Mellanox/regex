@@ -158,6 +158,13 @@ mlx5_regexdev_enqueue(struct rte_regexdev *dev, uint16_t qp_id,
 		sq = &queue->sqs[sqid];
 		while (can_send(sq)) {
 			job_id = job_id_get(sqid, sq_size_get(sq), sq->pi);
+			if (unlikely(rte_pktmbuf_data_len(ops[i]->mbuf) > MLX5_REGEX_MAX_INPUT)) {
+					DRV_LOG(ERR, "Warning, Job input size %d exceed %d bytes",
+							rte_pktmbuf_data_len(ops[i]->mbuf),
+							MLX5_REGEX_MAX_INPUT);
+							return 0;
+			}
+				
 			prep_one(sq, ops[i], &queue->jobs[job_id]);
 			i++;
 			if (unlikely(i == nb_ops)) {
