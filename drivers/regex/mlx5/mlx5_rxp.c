@@ -532,11 +532,20 @@ parse_error:
 static int
 mlnx_set_database(struct mlx5_regex_priv *priv, uint8_t id, uint8_t db_to_use)
 {
+	int ret;
 	uint32_t umem_id;
 
-	mlx5_devx_regex_database_stop(priv->ctx, id);
+	ret = mlx5_devx_regex_database_stop(priv->ctx, id);
+	if (ret < 0) {
+		DRV_LOG(ERR, "stop engine failed!");
+		return ret;
+	}
 	umem_id = mlx5_os_get_umem_id(priv->db[db_to_use].umem.umem);
-	mlx5_devx_regex_database_program(priv->ctx, id, umem_id, 0);
+	ret = mlx5_devx_regex_database_program(priv->ctx, id, umem_id, 0);
+	if (ret < 0) {
+		DRV_LOG(ERR, "program db failed!");
+		return ret;
+	}
 	return 0;
 }
 
@@ -643,10 +652,13 @@ program_rxp_rules(struct mlx5_regex_priv *priv,
 		DRV_LOG(ERR, "Failed to setup db memory!");
 		return db_free;
 	}
-	ret = mlnx_set_database(priv, id, db_free);
-	if (ret < 0) {
-		DRV_LOG(ERR, "Failed to register db memory!");
-		return ret;
+	if (priv->prog_mode == MLX5_RXP_PRIVATE_PROG_MODE) {
+		/* Register early to ensure RXP writes to EM use valid addr. */
+		ret = mlnx_set_database(priv, id, db_free);
+		if (ret < 0) {
+			DRV_LOG(ERR, "Failed to register db memory!");
+			return ret;
+		}
 	}
 	ret = write_private_rules(priv, rules, id);
 	if (ret < 0) {
