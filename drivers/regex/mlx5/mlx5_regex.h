@@ -11,6 +11,7 @@
 #include <infiniband/mlx5dv.h>
 
 #include <mlx5_common.h>
+#include <mlx5_common_mr.h>
 
 #include "mlx5_rxp.h"
 
@@ -50,6 +51,7 @@ struct mlx5_regex_qp {
 	struct ibv_mr *inputs;
 	struct ibv_mr *outputs;
 	size_t ci, pi;
+	struct mlx5_mr_ctrl mr_ctrl;
 };
 
 struct mlx5_regex_db {
@@ -78,6 +80,7 @@ struct mlx5_regex_priv {
 	struct mlx5dv_devx_uar *uar; /* UAR object. */
 	struct ibv_pd *pd;
 	struct mlx5_dbr_page_list dbrpgs; /* Door-bell pages. */
+	struct mlx5_mr_share_cache mr_scache; /* Global shared MR cache. */
 };
 
 /* mlx5_regex.c */

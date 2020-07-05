@@ -10,6 +10,7 @@
 #include <rte_regexdev.h>
 #include <rte_regexdev_core.h>
 #include <rte_regexdev_driver.h>
+#include <rte_dev.h>
 
 #include <mlx5_common.h>
 #include <mlx5_glue.h>
@@ -366,6 +367,9 @@ mlx5_regex_qp_setup(struct rte_regexdev *dev, uint16_t qp_ind,
 			goto error;
 		}
 	}
+
+	ret = mlx5_mr_btree_init(&qp->mr_ctrl.cache_bh, MLX5_MR_BTREE_CACHE_N,
+				 rte_socket_id());
 
 	mlx5_regexdev_setup_fastpath(priv, qp_ind);
 	return 0;
