@@ -1194,6 +1194,16 @@ F: drivers/event/opdl/
 F: doc/guides/eventdevs/opdl.rst
 
 
+RegEx Drivers
+------------------
+M: Ori Kam <orika@mellanox.com>
+F: drivers/regex/
+
+Mellanox BF2
+M: Ori Kam <orika@mellanox.com>
+F: drivers/regex/mlx5/
+
+
 Rawdev Drivers
 --------------
 
