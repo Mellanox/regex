@@ -108,6 +108,8 @@ mlx5_regex_get_name(char *name, struct rte_pci_device *pci_dev __rte_unused)
 		pci_dev->addr.devid, pci_dev->addr.function);
 }
 
+void mlx5_os_set_reg_mr_cb(mlx5_reg_mr_t *reg_mr_cb,
+                           mlx5_dereg_mr_t *dereg_mr_cb);
 static int
 mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 		     struct rte_pci_device *pci_dev)
@@ -193,6 +195,18 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	priv->regexdev->device = (struct rte_device *)pci_dev;
 	priv->regexdev->data->dev_private = priv;
 	priv->regexdev->state = RTE_REGEXDEV_READY;
+
+	mlx5_os_set_reg_mr_cb(&priv->mr_scache.reg_mr_cb,
+			      &priv->mr_scache.dereg_mr_cb);
+	ret = mlx5_mr_btree_init(&priv->mr_scache.cache,
+				 MLX5_MR_BTREE_CACHE_N * 2,
+				 rte_socket_id());
+
+	if (ret) {
+		DRV_LOG(ERR, "MR init tree failed.");
+	    rte_errno = ENOMEM;
+		goto error;
+	}
 	return 0;
 
 error:
