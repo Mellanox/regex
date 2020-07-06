@@ -220,7 +220,7 @@ poll_one(struct mlx5_regex_cq *cq)
 
 	if (unlikely(ret == MLX5_CQE_STATUS_ERR)) {
 		DRV_LOG(ERR, "Completion with error on qp 0x%x",  0);
-		exit(-1);
+		return NULL;
 	}
 
 	if (unlikely(ret != MLX5_CQE_STATUS_SW_OWN))
@@ -257,7 +257,7 @@ mlx5_regexdev_dequeue(struct rte_regexdev *dev, uint16_t qp_id,
 
 	while ((cqe = poll_one(cq))) {
 		uint16_t wq_counter
-			= (be16toh(cqe->wqe_counter) + 1)%MAX_WQE_INDEX;
+			= (rte_be_to_cpu_16(cqe->wqe_counter) + 1)%MAX_WQE_INDEX;
 		size_t sqid = cqe->rsvd3[2];
 		struct mlx5_regex_sq *sq = &queue->sqs[sqid];
 		while (sq->ci != wq_counter) {
