@@ -272,7 +272,7 @@ mlx5_regexdev_dequeue(struct rte_regexdev *dev, uint16_t qp_id,
 		}
 		cq->ci = (cq->ci + 1) & 0xffffff;
 		rte_wmb();
-		cq->dbr[0] = htobe32(cq->ci);
+		cq->dbr[0] = rte_cpu_to_be_32(cq->ci);
 		queue->free_sqs |= (1 << sqid);
 	}
 
