@@ -95,7 +95,7 @@ prep_one(struct mlx5_regex_sq *sq, struct rte_regex_ops *op,
 
 	struct mlx5_wqe_data_seg *input_seg =
 		(struct mlx5_wqe_data_seg *)(wqe+32);
-	input_seg->byte_count = htobe32(rte_pktmbuf_data_len(op->mbuf));
+	input_seg->byte_count = rte_cpu_to_be_32(rte_pktmbuf_data_len(op->mbuf));
 
 	job->user_id = op->user_id;
 	sq->db_pi = sq->pi;
@@ -111,7 +111,7 @@ send_doorbell(struct mlx5dv_devx_uar *uar, struct mlx5_regex_sq *sq)
 	uint64_t *doorbell_addr =
 		(uint64_t *)((uint8_t *)uar->base_addr + 0x800);
 	rte_cio_wmb();
-	sq->dbr[MLX5_SND_DBR] = htobe32(sq->db_pi);
+	sq->dbr[MLX5_SND_DBR] = rte_cpu_to_be_32(sq->db_pi);
 	rte_wmb();
 	*doorbell_addr = *(volatile uint64_t *)wqe;
 	rte_wmb();
@@ -286,9 +286,9 @@ void mlx5dv_set_metadata_seg(struct mlx5_wqe_metadata_seg *seg,
 			     uint32_t mmo_control_31_0, uint32_t lkey,
 			     uintptr_t address)
 {
-	seg->mmo_control_31_0 = htobe32(mmo_control_31_0);
-	seg->lkey       = htobe32(lkey);
-	seg->addr       = htobe64(address);
+	seg->mmo_control_31_0 = rte_cpu_to_be_32(mmo_control_31_0);
+	seg->lkey       = rte_cpu_to_be_32(lkey);
+	seg->addr       = rte_cpu_to_be_64(address);
 }
 
 static void
