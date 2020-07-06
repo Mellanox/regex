@@ -271,7 +271,7 @@ mlx5_regexdev_dequeue(struct rte_regexdev *dev, uint16_t qp_id,
 			i++;
 		}
 		cq->ci = (cq->ci + 1) & 0xffffff;
-		asm volatile("" ::: "memory");
+		rte_wmb();
 		cq->dbr[0] = htobe32(cq->ci);
 		queue->free_sqs |= (1 << sqid);
 	}
