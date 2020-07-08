@@ -71,8 +71,23 @@ void set_data_seg(struct mlx5_wqe_data_seg *seg,
         seg->addr       = rte_cpu_to_be_64(address);
 }
 
-static MLX5DV_ALWAYS_INLINE
-void mlx5_regex_set_ctrl_seg(void *seg,
+static inline
+void set_wqe_ctrl_seg(struct mlx5_wqe_ctrl_seg *seg, uint16_t pi,
+                         uint8_t opcode, uint8_t opmod, uint32_t qp_num,
+                         uint8_t fm_ce_se, uint8_t ds,
+                         uint8_t signature, uint32_t imm)
+{
+        seg->opmod_idx_opcode   = rte_cpu_to_be_32(((uint32_t)opmod << 24) |
+						   ((uint32_t)pi << 8) |
+						    opcode);
+        seg->qpn_ds             = rte_cpu_to_be_32((qp_num << 8) | ds);
+        seg->fm_ce_se           = fm_ce_se;
+        seg->signature          = signature;
+        seg->imm                = imm;
+}
+
+static inline
+void set_regex_ctrl_seg(void *seg,
 			     uint8_t le, uint16_t subset_id0,
 			     uint16_t subset_id1, uint16_t subset_id2,
 			     uint16_t subset_id3, uint8_t ctrl)
@@ -97,17 +112,18 @@ prep_one(struct mlx5_regex_sq *sq, struct rte_regex_ops *op,
 	uint8_t *wqe = (uint8_t *)sq->wqe + wqe_offset;
 	int ds = 4; /*  ctrl + meta + input + output */
 
-	mlx5dv_set_ctrl_seg((struct mlx5_wqe_ctrl_seg *)wqe, sq->pi,
+	set_wqe_ctrl_seg((struct mlx5_wqe_ctrl_seg *)wqe, sq->pi,
 			    MLX5_OPCODE_MMO,
 			    MLX5_OPC_MOD_MMO_REGEX, sq->obj->id,
 			    0, ds, 0, 0);
 
-	mlx5_regex_set_ctrl_seg(wqe+12, 0, op->group_id0, op->group_id1,
+	set_regex_ctrl_seg(wqe + MLX5_REGEX_WQE_CTRL_OFFSET,
+				0, op->group_id0, op->group_id1,
 				op->group_id2,
 				op->group_id3, 0);
 
 	struct mlx5_wqe_data_seg *input_seg =
-		(struct mlx5_wqe_data_seg *)(wqe+32);
+		(struct mlx5_wqe_data_seg *)(wqe + MLX5_REGEX_WQE_GATHER_OFFSET);
 	input_seg->byte_count = rte_cpu_to_be_32(rte_pktmbuf_data_len(op->mbuf));
 
 	job->user_id = op->user_id;
@@ -124,7 +140,7 @@ send_doorbell(struct mlx5dv_devx_uar *uar, struct mlx5_regex_sq *sq)
 	uint64_t *doorbell_addr =
 		(uint64_t *)((uint8_t *)uar->base_addr + 0x800);
 	rte_cio_wmb();
-	sq->dbr[MLX5_SND_DBR] = rte_cpu_to_be_32(sq->db_pi);
+	sq->dbr[MLX5_SND_DBR] = rte_cpu_to_be_32((sq->db_pi+1)%MAX_WQE_INDEX);
 	rte_wmb();
 	*doorbell_addr = *(volatile uint64_t *)wqe;
 	rte_wmb();
@@ -234,7 +250,7 @@ poll_one(struct mlx5_regex_cq *cq)
 
 	if (unlikely(ret == MLX5_CQE_STATUS_ERR)) {
 		DRV_LOG(ERR, "Completion with error on qp 0x%x",  0);
-		exit(-1);
+		return NULL;
 	}
 
 	if (unlikely(ret != MLX5_CQE_STATUS_SW_OWN))
