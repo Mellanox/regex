@@ -287,7 +287,7 @@ mlx5_regexdev_dequeue(struct rte_regexdev *dev, uint16_t qp_id,
 
 	while ((cqe = poll_one(cq))) {
 		uint16_t wq_counter
-			= (be16toh(cqe->wqe_counter) + 1)%MAX_WQE_INDEX;
+			= (rte_be_to_cpu_16(cqe->wqe_counter) + 1)%MAX_WQE_INDEX;
 		size_t sqid = cqe->rsvd3[2];
 		struct mlx5_regex_sq *sq = &queue->sqs[sqid];
 		while (sq->ci != wq_counter) {
@@ -295,8 +295,7 @@ mlx5_regexdev_dequeue(struct rte_regexdev *dev, uint16_t qp_id,
 				/* Return without updating cq->ci */
 				goto out;
 			}
-			uint32_t job_id = job_id_get(sqid,
-						     sq_size_get(sq), sq->ci);
+			uint32_t job_id = job_id_get(sqid, sq_size_get(sq), sq->ci);
 			extract_result(ops[i], &queue->jobs[job_id]);
 			sq->ci = (sq->ci+1)%MAX_WQE_INDEX;
 			i++;
