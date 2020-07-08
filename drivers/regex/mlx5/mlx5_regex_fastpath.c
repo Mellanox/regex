@@ -204,15 +204,16 @@ out:
 }
 
 #define MLX5_REGEX_RESP_SZ 8
-
+#define MLX5_REGEX_METADATA_OFF 32
 static inline void
 extract_result(struct rte_regex_ops *op, struct mlx5_regex_job *job)
 {
 	size_t j, offset;
 	op->user_id = job->user_id;
-	op->nb_matches = DEVX_GET(regexp_metadata, job->metadata + 32,
-				  match_count);
-	op->nb_actual_matches = DEVX_GET(regexp_metadata, job->metadata + 32,
+	op->nb_matches = DEVX_GET(regexp_metadata, job->metadata +
+				  MLX5_REGEX_METADATA_OFF, match_count);
+	op->nb_actual_matches = DEVX_GET(regexp_metadata, job->metadata +
+					 MLX5_REGEX_METADATA_OFF,
 					 detected_match_count);
 	for (j = 0; j < op->nb_matches; j++) {
 		offset = MLX5_REGEX_RESP_SZ * j;
