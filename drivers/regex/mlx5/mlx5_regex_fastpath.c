@@ -38,6 +38,10 @@
 #define MLX5_REGEX_MAX_INPUT (1<<14)
 #define MLX5_REGEX_MAX_OUTPUT (1<<11)
 
+#define MLX5_REGEX_WQE_CTRL_OFFSET 12
+#define MLX5_REGEX_WQE_METADATA_OFFSET 16
+#define MLX5_REGEX_WQE_GATHER_OFFSET 32
+#define MLX5_REGEX_WQE_SCATTER_OFFSET 48
 
 static inline uint32_t
 sq_size_get(struct mlx5_regex_sq *sq)
@@ -57,6 +61,15 @@ struct mlx5_regex_job {
 	volatile uint8_t *metadata;
 } __rte_cached_aligned;
 
+static inline
+void set_data_seg(struct mlx5_wqe_data_seg *seg,
+                         uint32_t length, uint32_t lkey,
+                         uintptr_t address)
+{
+        seg->byte_count = rte_cpu_to_be_32(length);
+        seg->lkey       = rte_cpu_to_be_32(lkey);
+        seg->addr       = rte_cpu_to_be_64(address);
+}
 
 static MLX5DV_ALWAYS_INLINE
 void mlx5_regex_set_ctrl_seg(void *seg,
@@ -283,8 +296,8 @@ out:
 	return i;
 }
 
-static MLX5DV_ALWAYS_INLINE
-void mlx5dv_set_metadata_seg(struct mlx5_wqe_metadata_seg *seg,
+static inline
+void set_metadata_seg(struct mlx5_wqe_metadata_seg *seg,
 			     uint32_t mmo_control_31_0, uint32_t lkey,
 			     uintptr_t address)
 {
@@ -305,16 +318,14 @@ setup_sqs(struct mlx5_regex_qp *queue)
 			job_id = sqid * sq_size_get(sq) + entry;
 			struct mlx5_regex_job *job = &queue->jobs[job_id];
 
-			mlx5dv_set_metadata_seg((struct mlx5_wqe_metadata_seg *)
-						(wqe + 16),
+			set_metadata_seg((struct mlx5_wqe_metadata_seg *)(wqe + 16),
 						0, queue->metadata->lkey,
 						(uintptr_t)job->metadata);
-			mlx5dv_set_data_seg((struct mlx5_wqe_data_seg *)
-					    (wqe + 32),
+
+			set_data_seg((struct mlx5_wqe_data_seg *)(wqe + 32),
 					    0, queue->inputs->lkey,
 					    (uintptr_t)job->input);
-			mlx5dv_set_data_seg((struct mlx5_wqe_data_seg *)
-					    (wqe + 48),
+			set_data_seg((struct mlx5_wqe_data_seg *)(wqe + 48),
 					    1 << 11, queue->outputs->lkey,
 					    (uintptr_t)job->output);
 			wqe += 64;
