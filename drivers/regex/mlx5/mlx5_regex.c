@@ -151,6 +151,7 @@ mlx5_regex_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 		goto error;
 	}
 	priv->ctx = ctx;
+	priv->num_engines = attr.regexp_num_of_engines;
 	/* Default RXP programming mode to Shared. */
 	priv->prog_mode = MLX5_RXP_SHARED_PROG_MODE;
 	mlx5_regex_get_name(name, pci_dev);

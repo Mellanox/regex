@@ -2,9 +2,6 @@
  * Copyright 2020 Mellanox Technologies, Ltd
  */
 
-#include <errno.h>
-#include <sys/mman.h>
-
 #include <rte_log.h>
 #include <rte_errno.h>
 #include <rte_malloc.h>
@@ -429,7 +426,7 @@ rxp_init_rtru(struct ibv_context *ctx, uint8_t id, uint32_t init_bits)
 				     MLX5_RXP_CSR_STATUS_TRIAL_TIMEOUT, id);
 	if (ret)
 		return ret;
-	DRV_LOG(DEBUG, "rule Memory initialise: 0x%08X", poll_value);
+	DRV_LOG(DEBUG, "rule memory initialise: 0x%08X", poll_value);
 	/* Clear the init bit in the rtru ctrl CSR */
 	ctrl_value &= ~(MLX5_RXP_RTRU_CSR_CTRL_INIT);
 	mlx5_devx_regex_register_write(ctx, id, MLX5_RXP_RTRU_CSR_CTRL,
@@ -582,7 +579,7 @@ mlnx_update_database(struct mlx5_regex_priv *priv, uint8_t id)
 	uint8_t eng_assigned = MLX5_RXP_DB_NOT_ASSIGNED;
 
 	/* Check which database rxp_eng is currently located if any? */
-	for (i = 0; i < (MLX5_RXP_MAX_ENGINES + MLX5_RXP_EM_COUNT);
+	for (i = 0; i < (priv->num_engines + MLX5_RXP_EM_COUNT);
 	     i++) {
 		if (priv->db[i].db_assigned_to_eng_num == id) {
 			eng_assigned = i;
@@ -598,7 +595,7 @@ mlnx_update_database(struct mlx5_regex_priv *priv, uint8_t id)
 	    (eng_assigned != MLX5_RXP_DB_NOT_ASSIGNED))
 		return eng_assigned;
 	/* Check for inactive db memory to use. */
-	for (i = 0; i < (MLX5_RXP_MAX_ENGINES + MLX5_RXP_EM_COUNT);
+	for (i = 0; i < (priv->num_engines + MLX5_RXP_EM_COUNT);
 	     i++) {
 		if (priv->db[i].active == true)
 			continue; /* Already in use, so skip db. */
@@ -1087,7 +1084,7 @@ rxp_db_setup(struct mlx5_regex_priv *priv)
 	uint8_t i;
 
 	/* Setup database memories for both RXP engines + reprogram memory. */
-	for (i = 0; i < (MLX5_RXP_MAX_ENGINES + MLX5_RXP_EM_COUNT); i++) {
+	for (i = 0; i < (priv->num_engines + MLX5_RXP_EM_COUNT); i++) {
 		priv->db[i].ptr = rte_malloc("", MLX5_MAX_DB_SIZE, 0);
 		if (!priv->db[i].ptr) {
 			DRV_LOG(ERR, "Failed to alloc db memory!");
@@ -1112,9 +1109,9 @@ rxp_db_setup(struct mlx5_regex_priv *priv)
 	}
 	return 0;
 tidyup_error:
-	for (i = 0; i < (MLX5_RXP_MAX_ENGINES + MLX5_RXP_EM_COUNT); i++) {
+	for (i = 0; i < (priv->num_engines + MLX5_RXP_EM_COUNT); i++) {
 		if (priv->db[i].ptr)
-			munmap(priv->db[i].ptr, MLX5_MAX_DB_SIZE);
+			rte_free(priv->db[i].ptr);
 		if (priv->db[i].umem.umem)
 			mlx5_glue->devx_umem_dereg(priv->db[i].umem.umem);
 	}
@@ -1157,7 +1154,7 @@ mlx5_regex_rules_db_import(struct rte_regexdev *dev,
 		return ret;
 	}
 	/* Need to ensure RXP not busy before stop! */
-	for (id = 0; id < MLX5_RXP_MAX_ENGINES; id++) {
+	for (id = 0; id < priv->num_engines; id++) {
 		ret = rxp_stop_engine(priv->ctx, id);
 		if (ret) {
 			DRV_LOG(ERR, "Can't stop engine.");
