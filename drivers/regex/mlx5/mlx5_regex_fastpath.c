@@ -213,7 +213,7 @@ poll_one(struct mlx5_regex_cq *cq)
 	volatile struct mlx5_cqe *cqe;
 	size_t next_cqe_offset;
 
-	next_cqe_offset =  (cq->ci % cq_size_get(cq)) * sizeof(*cqe);
+	next_cqe_offset =  (cq->ci % cq_size_get(cq));
 	cqe = (volatile struct mlx5_cqe *)(cq->cqe + next_cqe_offset);
 	rte_cio_wmb();
 
