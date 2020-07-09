@@ -347,7 +347,7 @@ mlx5_regex_qp_setup(struct rte_regexdev *dev, uint16_t qp_ind,
 	}
 	qp->cq.log_nb_desc = rte_log2_u32(cfg->nb_desc);
 	log_desc = rte_log2_u32(qp->nb_desc / qp->nb_obj);
-	qp->cq.log_nb_desc = log_desc;
+	
 	ret = regex_ctrl_create_cq(priv, &qp->cq);
 	if (ret) {
 		DRV_LOG(ERR, "Can't create cq.");
