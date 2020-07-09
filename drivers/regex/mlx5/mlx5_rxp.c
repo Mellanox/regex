@@ -330,7 +330,6 @@ rxp_start_engine(struct ibv_context *ctx, uint8_t id)
 	if (ret)
 		return ret;
 	ctrl |= MLX5_RXP_CSR_CTRL_GO;
-	ctrl |= MLX5_RXP_CSR_CTRL_DISABLE_L2C;
 	ret = mlx5_devx_regex_register_write(ctx, id, MLX5_RXP_CSR_CTRL, ctrl);
 	return ret;
 }
