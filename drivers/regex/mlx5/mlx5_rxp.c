@@ -22,9 +22,6 @@
 #include "mlx5_rxp_csrs.h"
 #include "mlx5_rxp.h"
 
-/* TODO: get actual VIPER version capability bit when available! */
-#define VIPER_BF2	     1
-
 #define MLX5_REGEX_MAX_MATCHES MLX5_RXP_MAX_MATCHES
 #define MLX5_REGEX_MAX_PAYLOAD_SIZE MLX5_RXP_MAX_JOB_LENGTH
 #define MLX5_REGEX_MAX_RULES_PER_GROUP UINT32_MAX
@@ -994,18 +991,19 @@ write_shared_rules(struct mlx5_regex_priv *priv,
 {
 	uint32_t rule_cnt, rof_rule_addr;
 	uint64_t tmp_write_swap[4];
-#ifndef VIPER_BF2
-	uint64_t rof_value = 0;
-#endif
 	if (priv->prog_mode == MLX5_RXP_MODE_NOT_DEFINED)
 		return -EINVAL;
 	if ((rules->count == 0) || (count == 0))
 		return -EINVAL;
 	rule_cnt = 0;
+	/*
+	 * Note the following section of code carries out a 32byte swap of
+	 * instruction to coincide with HW 32byte swap. This may need removed
+	 * in new variants of this programming function!
+	 */
 	while (rule_cnt < rules->count) {
 		if ((rules->rules[rule_cnt].type == MLX5_RXP_ROF_ENTRY_EM) &&
 		    (priv->prog_mode == MLX5_RXP_SHARED_PROG_MODE)) {
-#ifdef VIPER_BF2
 			/*
 			 * Note there are always blocks of 8 instructions for
 			 * 7's written sequentially. However there is no
@@ -1067,32 +1065,6 @@ write_shared_rules(struct mlx5_regex_priv *priv,
 				return -1;
 			/* Fast forward as already handled block of 8. */
 			rule_cnt += MLX5_RXP_INST_BLOCK_SIZE;
-#else
-			/*
-			 * Ensure memory write not exceeding boundary check
-			 * essential to ensure 0x10000 offset accounted for!
-			 */
-			if ((uint8_t *)((uint8_t *)priv->db[db_to_program].ptr +
-			    (rules->rules[rule_cnt].addr <<
-			    MLX5_RXP_INST_OFFSET)) >=
-			    (uint8_t *)((uint8_t *)priv->db[db_to_program].ptr
-			    + MLX5_MAX_DB_SIZE)) {
-				/* Exceeded database memory boundary. */
-				DRV_LOG(ERR, "DB exceeded memory boundary!");
-				return -ENODEV;
-			}
-			/*
-			 * Rule address Offset to align with RXP external
-			 * instruction offset.
-			 */
-			rof_rule_addr = (rules->rules[rule_cnt].addr <<
-					 MLX5_RXP_INST_OFFSET);
-			rof_value = le64toh(rules->rules[rule_cnt].value);
-			memcpy((uint8_t *)(
-			       (uint8_t *)priv->db[db_to_program].ptr
-			       + rof_rule_addr), &rof_value, sizeof(uint64_t));
-			rule_cnt++;
-#endif /* VIPER_BF2 */
 		} else
 			rule_cnt++; /* Must be something other than EM rule. */
 	}
