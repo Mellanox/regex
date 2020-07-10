@@ -22,7 +22,7 @@
 #include "mlx5_rxp_csrs.h"
 #include "mlx5_rxp.h"
 
-#define MLX5_REGEX_PAGE_SIZE 4096
+#define MLX5_REGEX_NUM_WQE_PER_PAGE (4096/64)
 
 /**
  * Returns the number of qp obj to be created.
@@ -36,12 +36,8 @@
 static uint16_t
 regex_ctrl_get_nb_obj(uint16_t nb_desc)
 {
-	int pages;
-
-	pages = nb_desc / MLX5_REGEX_PAGE_SIZE;
-	if (pages > 1)
-		return pages + 1;
-	return 2;
+	return nb_desc/MLX5_REGEX_NUM_WQE_PER_PAGE +
+		!!(nb_desc % MLX5_REGEX_NUM_WQE_PER_PAGE);
 }
 
 /**
