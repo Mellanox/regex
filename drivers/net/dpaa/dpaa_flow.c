@@ -12,6 +12,7 @@
 #include <dpaa_flow.h>
 #include <rte_dpaa_logs.h>
 #include <fmlib/fm_port_ext.h>
+#include <fmlib/fm_vsp_ext.h>
 
 #define DPAA_MAX_NUM_ETH_DEV	8
 
@@ -46,6 +47,17 @@ struct dpaa_fm_model {
 static struct dpaa_fm_info fm_info;
 static struct dpaa_fm_model fm_model;
 static const char *fm_log = "/tmp/fmdpdk.bin";
+
+static inline uint8_t fm_default_vsp_id(struct fman_if *fif)
+{
+	/* Avoid being same as base profile which could be used
+	 * for kernel interface of shared mac.
+	 */
+	if (fif->base_profile_id)
+		return 0;
+	else
+		return DPAA_DEFAULT_RXQ_VSP_ID;
+}
 
 static void fm_prev_cleanup(void)
 {
@@ -300,10 +312,17 @@ set_hashParams_sctp(ioc_fm_pcd_kg_scheme_params_t *scheme_params, int hdr_idx)
 static int set_scheme_params(ioc_fm_pcd_kg_scheme_params_t *scheme_params,
 	ioc_fm_pcd_net_env_params_t *dist_units,
 	struct dpaa_if *dpaa_intf,
-	struct fman_if *fif __rte_unused)
+	struct fman_if *fif)
 {
 	int dist_idx, hdr_idx = 0;
 	PMD_INIT_FUNC_TRACE();
+
+	if (fif->num_profiles) {
+		scheme_params->param.override_storage_profile = true;
+		scheme_params->param.storage_profile.direct = true;
+		scheme_params->param.storage_profile.profile_select
+			.direct_relative_profileId = fm_default_vsp_id(fif);
+	}
 
 	scheme_params->param.use_hash = 1;
 	scheme_params->param.modify = false;
@@ -787,6 +806,14 @@ int dpaa_fm_config(struct rte_eth_dev *dev, uint64_t req_dist_set)
 		return -1;
 	}
 
+	if (fif->num_profiles) {
+		for (i = 0; i < dpaa_intf->nb_rx_queues; i++)
+			dpaa_intf->rx_queues[i].vsp_id =
+				fm_default_vsp_id(fif);
+
+		i = 0;
+	}
+
 	/* Set PCD netenv and scheme */
 	if (req_dist_set) {
 		ret = set_pcd_netenv_scheme(dpaa_intf, req_dist_set, fif);
@@ -911,4 +938,142 @@ int dpaa_fm_term(void)
 			DPAA_PMD_ERR("File remove: Failed");
 	}
 	return 0;
+}
+
+static int dpaa_port_vsp_configure(struct dpaa_if *dpaa_intf,
+		uint8_t vsp_id, t_Handle fman_handle,
+		struct fman_if *fif)
+{
+	t_FmVspParams vsp_params;
+	t_FmBufferPrefixContent buf_prefix_cont;
+	uint8_t mac_idx[] = {-1, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1};
+	uint8_t idx = mac_idx[fif->mac_idx];
+	int ret;
+
+	if (vsp_id == fif->base_profile_id && fif->is_shared_mac) {
+		/* For shared interface, VSP of base
+		 * profile is default pool located in kernel.
+		 */
+		dpaa_intf->vsp_bpid[vsp_id] = 0;
+		return 0;
+	}
+
+	if (vsp_id >= DPAA_VSP_PROFILE_MAX_NUM) {
+		DPAA_PMD_ERR("VSP ID %d exceeds MAX number %d",
+			vsp_id, DPAA_VSP_PROFILE_MAX_NUM);
+		return -1;
+	}
+
+	memset(&vsp_params, 0, sizeof(vsp_params));
+	vsp_params.h_Fm = fman_handle;
+	vsp_params.relativeProfileId = vsp_id;
+	vsp_params.portParams.portId = idx;
+	if (fif->mac_type == fman_mac_1g) {
+		vsp_params.portParams.portType = e_FM_PORT_TYPE_RX;
+	} else if (fif->mac_type == fman_mac_2_5g) {
+		vsp_params.portParams.portType = e_FM_PORT_TYPE_RX_2_5G;
+	} else if (fif->mac_type == fman_mac_10g) {
+		vsp_params.portParams.portType = e_FM_PORT_TYPE_RX_10G;
+	} else {
+		DPAA_PMD_ERR("Mac type %d error", fif->mac_type);
+		return -1;
+	}
+	vsp_params.extBufPools.numOfPoolsUsed = 1;
+	vsp_params.extBufPools.extBufPool[0].id =
+		dpaa_intf->vsp_bpid[vsp_id];
+	vsp_params.extBufPools.extBufPool[0].size =
+		RTE_MBUF_DEFAULT_BUF_SIZE;
+
+	dpaa_intf->vsp_handle[vsp_id] = FM_VSP_Config(&vsp_params);
+	if (!dpaa_intf->vsp_handle[vsp_id]) {
+		DPAA_PMD_ERR("FM_VSP_Config error for profile %d", vsp_id);
+		return -EINVAL;
+	}
+
+	/* configure the application buffer (structure, size and
+	 * content)
+	 */
+
+	memset(&buf_prefix_cont, 0, sizeof(buf_prefix_cont));
+
+	buf_prefix_cont.privDataSize = 16;
+	buf_prefix_cont.dataAlign = 64;
+	buf_prefix_cont.passPrsResult = true;
+	buf_prefix_cont.passTimeStamp = true;
+	buf_prefix_cont.passHashResult = false;
+	buf_prefix_cont.passAllOtherPCDInfo = false;
+	ret = FM_VSP_ConfigBufferPrefixContent(dpaa_intf->vsp_handle[vsp_id],
+					       &buf_prefix_cont);
+	if (ret != E_OK) {
+		DPAA_PMD_ERR("FM_VSP_ConfigBufferPrefixContent error for profile %d err: %d",
+			     vsp_id, ret);
+		return ret;
+	}
+
+	/* initialize the FM VSP module */
+	ret = FM_VSP_Init(dpaa_intf->vsp_handle[vsp_id]);
+	if (ret != E_OK) {
+		DPAA_PMD_ERR("FM_VSP_Init error for profile %d err:%d",
+			 vsp_id, ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+int dpaa_port_vsp_update(struct dpaa_if *dpaa_intf,
+		bool fmc_mode, uint8_t vsp_id, uint32_t bpid,
+		struct fman_if *fif)
+{
+	int ret = 0;
+	t_Handle fman_handle;
+
+	if (!fif->num_profiles)
+		return 0;
+
+	if (vsp_id >= fif->num_profiles)
+		return 0;
+
+	if (dpaa_intf->vsp_bpid[vsp_id] == bpid)
+		return 0;
+
+	if (dpaa_intf->vsp_handle[vsp_id]) {
+		ret = FM_VSP_Free(dpaa_intf->vsp_handle[vsp_id]);
+		if (ret != E_OK) {
+			DPAA_PMD_ERR(
+				"Error FM_VSP_Free: "
+				"err %d vsp_handle[%d]",
+				ret, vsp_id);
+			return ret;
+		}
+		dpaa_intf->vsp_handle[vsp_id] = 0;
+	}
+
+	if (fmc_mode)
+		fman_handle = FM_Open(0);
+	else
+		fman_handle = fm_info.fman_handle;
+
+	dpaa_intf->vsp_bpid[vsp_id] = bpid;
+
+	return dpaa_port_vsp_configure(dpaa_intf, vsp_id, fman_handle, fif);
+}
+
+int dpaa_port_vsp_cleanup(struct dpaa_if *dpaa_intf, struct fman_if *fif)
+{
+	int idx, ret;
+
+	for (idx = 0; idx < (uint8_t)fif->num_profiles; idx++) {
+		if (dpaa_intf->vsp_handle[idx]) {
+			ret = FM_VSP_Free(dpaa_intf->vsp_handle[idx]);
+			if (ret != E_OK) {
+				DPAA_PMD_ERR(
+				"Error FM_VSP_Free: err %d vsp_handle[%d]",
+					ret, idx);
+				return ret;
+			}
+		}
+	}
+
+	return E_OK;
 }
