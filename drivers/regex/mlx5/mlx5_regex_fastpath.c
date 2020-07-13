@@ -325,13 +325,14 @@ setup_sqs(struct mlx5_regex_qp *queue)
 			struct mlx5_regex_job *job = &queue->jobs[job_id];
 
 			set_metadata_seg((struct mlx5_wqe_metadata_seg *)
-					 (wqe + 16), 0, queue->metadata->lkey,
+					 (wqe + MLX5_REGEX_WQE_METADATA_OFFSET),
+					 0, queue->metadata->lkey,
 					 (uintptr_t)job->metadata);
-			set_data_seg((struct mlx5_wqe_data_seg *)(wqe + 32),
+			set_data_seg((struct mlx5_wqe_data_seg *)(wqe + MLX5_REGEX_WQE_GATHER_OFFSET),
 				     0, queue->inputs->lkey,
 				     (uintptr_t)job->input);
-			set_data_seg((struct mlx5_wqe_data_seg *)(wqe + 48),
-				     1 << 11, queue->outputs->lkey,
+			set_data_seg((struct mlx5_wqe_data_seg *)(wqe + MLX5_REGEX_WQE_SCATTER_OFFSET),
+				     MLX5_REGEX_MAX_OUTPUT, queue->outputs->lkey,
 				     (uintptr_t)job->output);
 			wqe += 64;
 		}
@@ -394,13 +395,13 @@ setup_buffers(struct mlx5_regex_qp *qp, struct ibv_pd *pd)
 	for (i = 0; i < qp->nb_desc; i++) {
 		qp->jobs[i].input =
 			(uint8_t *)qp->inputs->addr +
-			(i % qp->nb_desc) * MLX5_REGEX_MAX_INPUT;
+			(i % qp->nb_desc)*MLX5_REGEX_MAX_INPUT;
 		qp->jobs[i].output =
 			(uint8_t *)qp->outputs->addr +
-			(i % qp->nb_desc) * MLX5_REGEX_MAX_OUTPUT;
+			(i % qp->nb_desc)*MLX5_REGEX_MAX_OUTPUT;
 		qp->jobs[i].metadata =
 			(uint8_t *)qp->metadata->addr +
-			(i % qp->nb_desc) * MLX5_REGEX_METADATA_SIZE;
+			(i % qp->nb_desc)*MLX5_REGEX_METADATA_SIZE;
 	}
 	return 0;
 
