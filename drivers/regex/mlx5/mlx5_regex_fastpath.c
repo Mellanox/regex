@@ -113,7 +113,7 @@ static inline void
 prep_one(struct mlx5_regex_sq *sq, struct rte_regex_ops *op,
 	 struct mlx5_regex_job *job)
 {
-	size_t wqe_offset = (sq->pi % sq_size_get(sq)) * MLX5_SEND_WQE_BB;
+	size_t wqe_offset = (sq->pi & (sq_size_get(sq) - 1)) * MLX5_SEND_WQE_BB;
 	uint8_t *wqe = (uint8_t *)sq->wqe + wqe_offset;
 	int ds = 4; /*  ctrl + meta + input + output */
 
@@ -133,20 +133,19 @@ prep_one(struct mlx5_regex_sq *sq, struct rte_regex_ops *op,
 		rte_cpu_to_be_32(rte_pktmbuf_data_len(op->mbuf));
 	job->user_id = op->user_id;
 	sq->db_pi = sq->pi;
-	sq->pi = (sq->pi + 1) % MLX5_REGEX_MAX_WQE_INDEX;
+	sq->pi = (sq->pi + 1) & MLX5_REGEX_MAX_WQE_INDEX;
 }
 
 static inline void
 send_doorbell(struct mlx5dv_devx_uar *uar, struct mlx5_regex_sq *sq)
 {
-	size_t wqe_offset = (sq->db_pi % sq_size_get(sq)) * MLX5_SEND_WQE_BB;
+	size_t wqe_offset = (sq->db_pi & (sq_size_get(sq) - 1)) * MLX5_SEND_WQE_BB;
 	uint8_t *wqe = (uint8_t *)sq->wqe + wqe_offset;
 	((struct mlx5_wqe_ctrl_seg *)wqe)->fm_ce_se = MLX5_WQE_CTRL_CQ_UPDATE;
 	uint64_t *doorbell_addr =
 		(uint64_t *)((uint8_t *)uar->base_addr + 0x800);
 	rte_cio_wmb();
-	sq->dbr[MLX5_SND_DBR] = rte_cpu_to_be_32((sq->db_pi + 1) %
-						 MLX5_REGEX_MAX_WQE_INDEX);
+	sq->dbr[MLX5_SND_DBR] = rte_cpu_to_be_32((sq->db_pi + 1) & MLX5_REGEX_MAX_WQE_INDEX);
 	rte_wmb();
 	*doorbell_addr = *(volatile uint64_t *)wqe;
 	rte_wmb();
