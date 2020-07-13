@@ -161,7 +161,7 @@ can_send(struct mlx5_regex_sq *sq) {
 
 static inline uint32_t
 job_id_get(uint32_t qid, size_t sq_size, size_t index) {
-	return qid*sq_size + index % sq_size;
+	return qid * sq_size + (index & (sq_size - 1));
 }
 
 /**
@@ -241,7 +241,7 @@ poll_one(struct mlx5_regex_cq *cq)
 	volatile struct mlx5_cqe *cqe;
 	size_t next_cqe_offset;
 
-	next_cqe_offset =  (cq->ci % cq_size_get(cq));
+	next_cqe_offset =  (cq->ci & ( cq_size_get(cq) - 1));
 	cqe = (volatile struct mlx5_cqe *)(cq->cqe + next_cqe_offset);
 	rte_cio_wmb();
 
@@ -286,7 +286,7 @@ mlx5_regexdev_dequeue(struct rte_regexdev *dev, uint16_t qp_id,
 
 	while ((cqe = poll_one(cq))) {
 		uint16_t wq_counter
-			= (rte_be_to_cpu_16(cqe->wqe_counter) + 1) %
+			= (rte_be_to_cpu_16(cqe->wqe_counter) + 1) &
 			  MLX5_REGEX_MAX_WQE_INDEX;
 		size_t sqid = cqe->rsvd3[2];
 		struct mlx5_regex_sq *sq = &queue->sqs[sqid];
@@ -298,7 +298,7 @@ mlx5_regexdev_dequeue(struct rte_regexdev *dev, uint16_t qp_id,
 			uint32_t job_id = job_id_get(sqid, sq_size_get(sq),
 						     sq->ci);
 			extract_result(ops[i], &queue->jobs[job_id]);
-			sq->ci = (sq->ci + 1) % MLX5_REGEX_MAX_WQE_INDEX;
+			sq->ci = (sq->ci + 1) & MLX5_REGEX_MAX_WQE_INDEX;
 			i++;
 		}
 		cq->ci = (cq->ci + 1) & 0xffffff;
