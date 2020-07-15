@@ -98,6 +98,7 @@ struct mlx5_hca_attr {
 	uint32_t non_wire_sq:1; /* SQ with non-wire ops is supported. */
 	uint32_t log_max_static_sq_wq:5; /* Static WQE size SQ. */
 	uint32_t dev_freq_khz; /* Timestamp counter frequency, kHz. */
+	uint32_t scatter_fcs_w_decap_disable:1;
 	struct mlx5_hca_qos_attr qos;
 	struct mlx5_hca_vdpa_attr vdpa;
 };
