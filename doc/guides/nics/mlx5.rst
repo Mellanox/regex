@@ -928,6 +928,16 @@ Driver options
 
   By default, the PMD will set this value to 0.
 
+- ``decap_en`` parameter [int]
+
+  The new devarg ``decap_en`` is introduced to provide the choice to the NICs
+  which does not support FCS (frame checksum) scattering for the tunnel
+  decapsulated packets. By set the devarg value 0 to force the FCS feature
+  enable and rejecting tunnel decap actions in the rte_flow engine for these
+  special NICs.
+
+  By default, the PMD will set this value to 1.
+
 .. _mlx5_firmware_config:
 
 Firmware configuration
