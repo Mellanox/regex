@@ -46,16 +46,17 @@ CFLAGS += -I$(RTE_SDK)/drivers/common/mlx5/linux
 CFLAGS += -I$(RTE_SDK)/drivers/net/mlx5
 CFLAGS += -I$(RTE_SDK)/drivers/net/mlx5/linux
 CFLAGS += -I$(BUILDDIR)/drivers/common/mlx5
+CFLAGS += -I$(RTE_SDK)/drivers/bus/mlx5_pci
 CFLAGS += -D_BSD_SOURCE
 CFLAGS += -D_DEFAULT_SOURCE
 CFLAGS += -D_XOPEN_SOURCE=600
 CFLAGS += $(WERROR_FLAGS)
 CFLAGS += -Wno-strict-prototypes
 LDLIBS += -lrte_common_mlx5
+LDLIBS += -lrte_bus_mlx5_pci
 LDLIBS += -lm
 LDLIBS += -lrte_eal -lrte_mbuf -lrte_mempool -lrte_ring
 LDLIBS += -lrte_ethdev -lrte_net -lrte_kvargs
-LDLIBS += -lrte_bus_pci
 
 # A few warnings cannot be avoided in external headers.
 CFLAGS += -Wno-error=cast-qual

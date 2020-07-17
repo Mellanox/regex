@@ -24,13 +24,14 @@ CFLAGS += -I$(RTE_SDK)/drivers/common/mlx5/linux
 CFLAGS += -I$(RTE_SDK)/drivers/net/mlx5_vdpa
 CFLAGS += -I$(RTE_SDK)/lib/librte_sched
 CFLAGS += -I$(BUILDDIR)/drivers/common/mlx5
+CFLAGS += -I$(RTE_SDK)/drivers/bus/mlx5_pci
 CFLAGS += -D_BSD_SOURCE
 CFLAGS += -D_DEFAULT_SOURCE
 CFLAGS += -D_XOPEN_SOURCE=600
 CFLAGS += $(WERROR_FLAGS)
 CFLAGS += -Wno-strict-prototypes
 LDLIBS += -lrte_common_mlx5
-LDLIBS += -lrte_eal -lrte_vhost -lrte_kvargs -lrte_pci -lrte_bus_pci -lrte_sched
+LDLIBS += -lrte_eal -lrte_vhost -lrte_kvargs -lrte_pci -lrte_bus_mlx5_pci -lrte_sched
 LDLIBS += -pthread
 
 # A few warnings cannot be avoided in external headers.

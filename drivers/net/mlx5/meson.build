@@ -8,7 +8,7 @@ if not (is_linux or is_windows)
 	subdir_done()
 endif
 
-deps += ['hash', 'common_mlx5']
+deps += ['hash', 'common_mlx5', 'bus_mlx5_pci']
 sources = files(
 	'mlx5.c',
 	'mlx5_ethdev.c',

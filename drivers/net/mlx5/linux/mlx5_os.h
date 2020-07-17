@@ -15,4 +15,5 @@ enum {
 #define PCI_DRV_FLAGS  (RTE_PCI_DRV_INTR_LSC | \
 			RTE_PCI_DRV_INTR_RMV | \
 			RTE_PCI_DRV_PROBE_AGAIN)
+
 #endif /* RTE_PMD_MLX5_OS_H_ */
