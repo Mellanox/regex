@@ -2086,7 +2086,7 @@ RTE_LOG_REGISTER(mlx5_logtype, pmd.net.mlx5, NOTICE)
 /**
  * Driver initialization routine.
  */
-RTE_INIT(rte_mlx5_pmd_init)
+RTE_INIT_PRIO(rte_mlx5_pmd_init, CLASS)
 {
 	/* Build the static tables for Verbs conversion. */
 	mlx5_set_ptype_table();

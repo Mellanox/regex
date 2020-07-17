@@ -89,7 +89,7 @@ RTE_INIT_PRIO(mlx5_log_init, LOG)
 /**
  * Initialization routine for run-time dependency on glue library.
  */
-RTE_INIT_PRIO(mlx5_glue_init, CLASS)
+RTE_INIT_PRIO(mlx5_glue_init, COMMON)
 {
 	mlx5_glue_constructor();
 }

@@ -844,7 +844,7 @@ RTE_LOG_REGISTER(mlx5_vdpa_logtype, pmd.vdpa.mlx5, NOTICE)
 /**
  * Driver initialization routine.
  */
-RTE_INIT(rte_mlx5_vdpa_init)
+RTE_INIT_PRIO(rte_mlx5_vdpa_init, CLASS)
 {
 	if (mlx5_glue)
 		rte_pci_register(&mlx5_vdpa_driver);
