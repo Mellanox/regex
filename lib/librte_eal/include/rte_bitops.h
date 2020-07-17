@@ -17,6 +17,14 @@
 #include <rte_debug.h>
 #include <rte_compat.h>
 
+/**
+ * Get the uint64_t value for a specified bit set.
+ *
+ * @param nr
+ *   The bit number in range of 0 to 63.
+ */
+#define RTE_BIT64(nr) (UINT64_C(1) << (nr))
+
 /*------------------------ 32-bit relaxed operations ------------------------*/
 
 /**
