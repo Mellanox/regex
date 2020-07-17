@@ -135,6 +135,7 @@ typedef uint16_t unaligned_uint16_t;
 
 #define RTE_PRIORITY_LOG 101
 #define RTE_PRIORITY_BUS 110
+#define RTE_PRIORITY_COMMON 119
 #define RTE_PRIORITY_CLASS 120
 #define RTE_PRIORITY_LAST 65535
 
