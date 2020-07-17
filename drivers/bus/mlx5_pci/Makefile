@@ -16,7 +16,9 @@ CFLAGS += -I$(BUILDDIR)/drivers/common/mlx5
 CFLAGS += -I$(RTE_SDK)/drivers/common/mlx5/linux
 CFLAGS += -I$(BUILDDIR)/drivers/bus/pci
 CFLAGS += -I$(BUILDDIR)/drivers/bus
+CFLAGS += -D_DEFAULT_SOURCE
 LDLIBS += -lrte_eal
+LDLIBS += -lrte_kvargs
 LDLIBS += -lrte_common_mlx5
 LDLIBS += -lrte_pci -lrte_bus_pci
 
