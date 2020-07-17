@@ -1,0 +1,5 @@
+INTERNAL {
+	global:
+
+	rte_mlx5_pci_driver_register;
+};

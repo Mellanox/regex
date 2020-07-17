@@ -525,6 +525,11 @@ Intel FPGA bus
 M: Rosen Xu <rosen.xu@intel.com>
 F: drivers/bus/ifpga/
 
+Melllanox mlx5 PCI bus driver
+M: Parav Pandit <parav@mellaox.com>
+M: Matan Azrad <matan@mellanox.com>
+F: drivers/bus/mlx5_pci
+
 NXP buses
 M: Hemant Agrawal <hemant.agrawal@nxp.com>
 M: Sachin Saxena <sachin.saxena@nxp.com>

@@ -226,6 +226,11 @@ New Features
   See the :doc:`../sample_app_ug/l2_forward_real_virtual` for more
   details of this parameter usage.
 
+* **Added Mellanox mlx5_pci bus driver.**
+
+  Added mlx5_pci bus driver that supports loading multiple PMDs for
+  Mellanox mlx5 devices. This bus PMD is auto selected when its
+  upper layer PMD need it.
 
 Removed Items
 -------------
